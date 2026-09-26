@@ -19,7 +19,16 @@ An LLM can extract structured values from unstructured brief text and be constra
 
 1. **Omission versus invention.** Testing surfaced a real gap: when a brief mentions something outside the allowed schema (a social platform not in the data dictionary, for example), the model sometimes drops it silently rather than either forcing an invalid value in or flagging it as an assumption. The validation layer catches invalid values but doesn't catch omissions. Is a stricter prompt enough, or does this need a separate completeness check that diffs entities mentioned in the brief against what made it into the output?
 2. **Confidence, not just presence.** Right now a field is either populated or "not specified." For a real system, is a binary enough, or does whoever queries the third-party data provider need a confidence signal, so a low-confidence inferred field is treated differently from a directly stated one?
-3. **Cost at batch scale.** At roughly $0.01 to $0.02 per brief, one at a time is trivial. If this becomes a batch tool processing hundreds of briefs per campaign cycle, is per-call cost still negligible, or does that change the model choice or the prompt design to reduce token usage per call?
+3. **Cost at scale.** Based on actual per-brief costs observed during testing (roughly $0.007 per brief), here's what real volume looks like:
+
+   | Monthly volume | Estimated monthly cost |
+   |---|---|
+   | 100 briefs | ~$0.70 |
+   | 1,000 briefs | ~$7 |
+   | 10,000 briefs | ~$70 |
+   | 100,000 briefs | ~$700 |
+
+   This scales differently than the consent form scorer, since campaign teams process briefs in bursts (a launch cycle), not a steady daily stream. At even 10,000 briefs a month, cost stays low, but that assumes brief length stays roughly constant. A brief with much longer copy or many more assumptions to reason through will cost more per call, so if this tool starts ingesting longer campaign documents rather than short briefs, cost per unit should be re-measured, not assumed to hold.
 4. **Where does the data dictionary itself live?** It's hardcoded in the script right now. A real version likely needs this to be configurable, since the IAB taxonomy has ~1,500 possible segment values and different teams will want different subsets active.
 
 ## Architecture note
