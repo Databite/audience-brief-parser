@@ -63,7 +63,7 @@ Only use these fields, and only these allowed values for each field:
 
 Rules:
 1. If the brief does not give enough information to confidently pick a value for a field, use the exact string "not specified" for that field. Do not guess.
-2. If you infer a value from indirect language, for example inferring household_income from a phrase like "disposable income", still provide the value, but also list that inference in the assumptions list below.
+2. If you infer a value from indirect language, for example inferring household_income from a phrase like "disposable income", still provide the value, but also list that inference in the assumptions list below. Keep each assumption to one short sentence.
 3. If the brief mentions something relevant that has no matching allowed value in the schema, note it explicitly in the assumptions list rather than dropping it silently.
 4. Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
 {{
@@ -98,7 +98,7 @@ def llm_extract(brief_text):
     prompt = build_prompt(brief_text)
     response = client.messages.create(
         model=MODEL,
-        max_tokens=1000,
+        max_tokens=1500,
         messages=[{"role": "user", "content": prompt}]
     )
     input_tokens = response.usage.input_tokens
@@ -210,6 +210,7 @@ with tab2:
                             "truncated": truncated,
                             "validation_flags": "; ".join(flags) if flags else "none",
                             "assumptions": "; ".join(parsed.get("assumptions", [])),
+                            "raw_response": "",
                             "cost": round(cost, 5)
                         }
                         for field in DATA_DICTIONARY.keys():
@@ -219,8 +220,9 @@ with tab2:
                             "row": i + 1,
                             "parsed_ok": False,
                             "truncated": truncated,
-                            "validation_flags": "could not parse response",
+                            "validation_flags": "could not parse response" + (" (truncated)" if truncated else ""),
                             "assumptions": "",
+                            "raw_response": result_text,
                             "cost": round(cost, 5)
                         }
                         for field in DATA_DICTIONARY.keys():
@@ -231,8 +233,26 @@ with tab2:
 
                 results_df = pd.DataFrame(results)
                 st.subheader("Batch results")
-                st.dataframe(results_df)
+
+                summary_df = results_df[["row", "parsed_ok", "truncated", "validation_flags", "cost"]]
+                st.dataframe(summary_df, use_container_width=True)
+
                 st.write(f"Total batch cost: ${total_batch_cost:.5f}")
+
+                st.subheader("Full details per row")
+                for _, r in results_df.iterrows():
+                    label = f"Row {r['row']} — {'OK' if r['parsed_ok'] else 'PARSE ERROR'}, ${r['cost']}"
+                    with st.expander(label):
+                        st.markdown("**Extracted schema:**")
+                        for field in DATA_DICTIONARY.keys():
+                            st.write(f"- **{field}**: {r[field]}")
+                        st.markdown("**Validation flags:**")
+                        st.write(r["validation_flags"])
+                        st.markdown("**Assumptions:**")
+                        st.write(r["assumptions"] if r["assumptions"] else "None")
+                        if not r["parsed_ok"]:
+                            st.markdown("**Raw response (for debugging):**")
+                            st.text(r["raw_response"])
 
                 csv_buffer = io.StringIO()
                 results_df.to_csv(csv_buffer, index=False)
