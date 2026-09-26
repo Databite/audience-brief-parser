@@ -39,8 +39,7 @@ Testing surfaced two real gaps worth flagging for anyone extending this:
 - Anthropic API (Claude) for the extraction layer
 - Pandas (display formatting)
 
-## Running it locally
-
-
-**Live demo:** https://audience-brief-parser-4dwtsrouwolbwzqdqsa6sb.streamlit.app/
+## Live demo
+ 
+https://audience-brief-parser-4dwtsrouwolbwzqdqsa6sb.streamlit.app/
 
