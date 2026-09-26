@@ -1,5 +1,5 @@
 import streamlit as st
-from anthropic import Anthropic
+from anthropic import Anthropic, APIError, APIConnectionError, RateLimitError
 import os
 import json
 import pandas as pd
@@ -14,6 +14,10 @@ MODEL = "claude-sonnet-5"
 
 INPUT_COST_PER_1K = 0.003
 OUTPUT_COST_PER_1K = 0.015
+
+MIN_BRIEF_LENGTH = 15
+MAX_BRIEF_LENGTH = 3000
+MAX_BATCH_ROWS = 50
 
 DATA_DICTIONARY = {
     "age_range": {
@@ -54,7 +58,18 @@ DATA_DICTIONARY = {
     },
 }
 
-def build_extraction_prompt(brief_text):
+def validate_brief_input(text):
+    """Returns (is_valid, error_message). Checks length bounds before any API call is made."""
+    stripped = text.strip()
+    if len(stripped) == 0:
+        return False, "Please paste an ad brief before submitting."
+    if len(stripped) < MIN_BRIEF_LENGTH:
+        return False, f"That looks too short to be a real ad brief (minimum {MIN_BRIEF_LENGTH} characters). Please add more detail."
+    if len(stripped) > MAX_BRIEF_LENGTH:
+        return False, f"That brief is too long ({len(stripped)} characters, maximum {MAX_BRIEF_LENGTH}). Please shorten it or split it into separate briefs."
+    return True, None
+
+def build_prompt(brief_text):
     field_list = "\n".join([f'- {name}: allowed values are {info["allowed"]}' for name, info in DATA_DICTIONARY.items()])
     prompt = f"""You are a marketing data analyst. Read the ad brief below and extract a structured target audience description.
 
@@ -86,29 +101,6 @@ Ad brief:
 """
     return prompt
 
-def build_verification_prompt(brief_text, extracted_json):
-    prompt = f"""You are reviewing a colleague's work. They extracted a structured audience schema from an ad brief. Your job is to check their work for one specific kind of mistake: something meaningful mentioned in the brief that got dropped entirely, neither captured in a field value nor mentioned in the assumptions list.
-
-Original ad brief:
-\"\"\"
-{brief_text}
-\"\"\"
-
-Extracted schema:
-{json.dumps(extracted_json, indent=2)}
-
-Check specifically for:
-- A named platform, interest, or demographic detail mentioned in the brief that doesn't appear anywhere in the extracted fields or assumptions
-- A stated fact that was ignored rather than mapped or flagged
-
-Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
-{{
-  "omissions_found": true or false,
-  "omissions": ["one short sentence per omission found, empty list if none"]
-}}
-"""
-    return prompt
-
 def clean_json_text(text):
     text = text.strip()
     if text.startswith("```"):
@@ -118,43 +110,33 @@ def clean_json_text(text):
     return text.strip()
 
 def call_claude(prompt, max_tokens):
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}]
-    )
+    """Returns (result_text, cost, truncated, error_message). error_message is None on success."""
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}]
+        )
+    except RateLimitError:
+        return None, 0.0, False, "The AI service is temporarily rate limited. Please wait a moment and try again."
+    except APIConnectionError:
+        return None, 0.0, False, "Could not connect to the AI service. Please check your connection and try again."
+    except APIError as e:
+        return None, 0.0, False, f"The AI service returned an error and could not complete this request. ({e.__class__.__name__})"
+    except Exception as e:
+        return None, 0.0, False, f"An unexpected error occurred: {e.__class__.__name__}. Please try again."
+
     input_tokens = response.usage.input_tokens
     output_tokens = response.usage.output_tokens
     cost = (input_tokens / 1000 * INPUT_COST_PER_1K) + (output_tokens / 1000 * OUTPUT_COST_PER_1K)
     text_blocks = [block.text for block in response.content if block.type == "text"]
     result_text = "\n".join(text_blocks)
     truncated = response.stop_reason == "max_tokens"
-    return result_text, cost, truncated
+    return result_text, cost, truncated, None
 
-def extract_and_verify(brief_text):
-    extract_prompt = build_extraction_prompt(brief_text)
-    extract_result, extract_cost, extract_truncated = call_claude(extract_prompt, 1500)
-
-    try:
-        parsed = json.loads(clean_json_text(extract_result))
-    except json.JSONDecodeError:
-        return None, extract_result, extract_cost, extract_truncated, None, 0, False
-
-    verify_prompt = build_verification_prompt(brief_text, parsed)
-    verify_result, verify_cost, verify_truncated = call_claude(verify_prompt, 500)
-
-    try:
-        verification = json.loads(clean_json_text(verify_result))
-    except json.JSONDecodeError:
-        verification = {"omissions_found": False, "omissions": []}
-
-    if verification.get("omissions_found") and verification.get("omissions"):
-        existing_assumptions = parsed.get("assumptions", [])
-        caught_by_check = [f"[caught by self-check] {o}" for o in verification["omissions"]]
-        parsed["assumptions"] = existing_assumptions + caught_by_check
-
-    total_cost = extract_cost + verify_cost
-    return parsed, extract_result, total_cost, extract_truncated or verify_truncated, verification, verify_cost, True
+def llm_extract(brief_text):
+    prompt = build_prompt(brief_text)
+    return call_claude(prompt, 1500)
 
 def validate_against_dictionary(parsed_json):
     flags = []
@@ -165,7 +147,8 @@ def validate_against_dictionary(parsed_json):
     return flags
 
 st.title("Ad Brief to Audience Schema Translator")
-st.write("Extract a structured target audience description mapped to the IAB Tech Lab Audience Taxonomy 1.1. Every extraction is automatically self-checked for anything the model may have missed.")
+st.write("Extract a structured target audience description mapped to the IAB Tech Lab Audience Taxonomy 1.1.")
+st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. This is a prototype, not a validated production tool, always sanity-check the output before using it for real targeting decisions.")
 
 tab1, tab2 = st.tabs(["Single brief", "Batch mode"])
 
@@ -178,84 +161,69 @@ with tab1:
     brief_input = st.text_area("Ad brief", height=150)
 
     if st.button("Extract audience schema"):
-        if brief_input.strip() == "":
-            st.warning("Paste an ad brief first.")
+        is_valid, error_message = validate_brief_input(brief_input)
+        if not is_valid:
+            st.warning(error_message)
         else:
-            with st.spinner("Step 1 of 2: Extracting structured schema..."):
-                extract_prompt = build_extraction_prompt(brief_input)
-                extract_result, extract_cost, extract_truncated = call_claude(extract_prompt, 1500)
+            with st.spinner("Extracting with Claude..."):
+                result_text, cost, truncated, api_error = llm_extract(brief_input)
 
-            try:
-                parsed = json.loads(clean_json_text(extract_result))
-            except json.JSONDecodeError:
-                st.error("Claude did not return valid JSON on extraction. Raw response below.")
-                st.text(extract_result)
-                parsed = None
+            if api_error:
+                st.error(api_error)
+            else:
+                st.session_state.total_cost += cost
+                st.session_state.scan_count += 1
 
-            verification = None
-            verify_cost = 0
+                if truncated:
+                    st.warning("Response was cut off before completion. Results below may be incomplete.")
 
-            if parsed:
-                with st.spinner("Step 2 of 2: Self-checking for anything missed..."):
-                    verify_prompt = build_verification_prompt(brief_input, parsed)
-                    verify_result, verify_cost, verify_truncated = call_claude(verify_prompt, 500)
                 try:
-                    verification = json.loads(clean_json_text(verify_result))
+                    parsed = json.loads(clean_json_text(result_text))
                 except json.JSONDecodeError:
-                    verification = {"omissions_found": False, "omissions": []}
+                    st.error("Claude did not return valid JSON. Raw response below.")
+                    st.text(result_text)
+                    parsed = None
 
-                if verification.get("omissions_found") and verification.get("omissions"):
-                    existing_assumptions = parsed.get("assumptions", [])
-                    caught_by_check = [f"[caught by self-check] {o}" for o in verification["omissions"]]
-                    parsed["assumptions"] = existing_assumptions + caught_by_check
+                if parsed:
+                    st.subheader("Validation against data dictionary")
+                    flags = validate_against_dictionary(parsed)
+                    if flags:
+                        for flag in flags:
+                            st.error(flag)
+                    else:
+                        st.success("All returned values match the allowed data dictionary values.")
 
-            total_cost = extract_cost + verify_cost
-            st.session_state.total_cost += total_cost
-            st.session_state.scan_count += 1
+                    st.subheader("1st-party attributes (query your own CRM or customer data)")
+                    first_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "1st_party"]
+                    st.table(pd.DataFrame(first_party_rows, columns=["Attribute", "Value"]))
 
-            if parsed:
-                if verification and verification.get("omissions_found"):
-                    st.info(f"Self-check caught {len(verification['omissions'])} thing(s) the first pass missed. See assumptions below.")
-                else:
-                    st.success("Self-check found no omissions.")
+                    st.subheader("3rd-party attributes (query external data providers)")
+                    third_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "3rd_party"]
+                    st.table(pd.DataFrame(third_party_rows, columns=["Attribute", "Value"]))
 
-                st.subheader("Validation against data dictionary")
-                flags = validate_against_dictionary(parsed)
-                if flags:
-                    for flag in flags:
-                        st.error(flag)
-                else:
-                    st.success("All returned values match the allowed data dictionary values.")
+                    assumptions = parsed.get("assumptions", [])
+                    st.subheader("Assumptions made by the model")
+                    if assumptions:
+                        for a in assumptions:
+                            st.warning(a)
+                    else:
+                        st.write("No assumptions flagged.")
 
-                st.subheader("1st-party attributes (query your own CRM or customer data)")
-                first_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "1st_party"]
-                st.table(pd.DataFrame(first_party_rows, columns=["Attribute", "Value"]))
-
-                st.subheader("3rd-party attributes (query external data providers)")
-                third_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "3rd_party"]
-                st.table(pd.DataFrame(third_party_rows, columns=["Attribute", "Value"]))
-
-                assumptions = parsed.get("assumptions", [])
-                st.subheader("Assumptions made by the model")
-                if assumptions:
-                    for a in assumptions:
-                        st.warning(a)
-                else:
-                    st.write("No assumptions flagged.")
-
-            st.subheader("Cost tracking")
-            st.write(f"Extraction call: \\${extract_cost:.5f}, self-check call: \\${verify_cost:.5f}, total: \\${total_cost:.5f}")
-            st.write(f"Total scans this session: {st.session_state.scan_count}")
-            st.write(f"Total estimated cost this session: ${st.session_state.total_cost:.5f}")
+                st.subheader("Cost tracking")
+                st.write(f"This extraction cost approximately \\${cost:.5f}")
+                st.write(f"Total scans this session: {st.session_state.scan_count}")
+                st.write(f"Total estimated cost this session: \\${st.session_state.total_cost:.5f}")
 
 with tab2:
-    st.write("Upload a CSV file with one column named `brief_text`, one ad brief per row. Each row runs through extraction and self-check.")
+    st.write(f"Upload a CSV file with one column named `brief_text`, one ad brief per row. Maximum {MAX_BATCH_ROWS} rows per batch.")
     uploaded_file = st.file_uploader("Upload CSV", type="csv")
 
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
         if "brief_text" not in df.columns:
             st.error("Your CSV must have a column named 'brief_text'.")
+        elif len(df) > MAX_BATCH_ROWS:
+            st.error(f"This file has {len(df)} rows, which exceeds the {MAX_BATCH_ROWS} row limit for this prototype. Please split it into smaller batches.")
         else:
             st.write(f"Found {len(df)} briefs in this file.")
             if st.button("Run batch extraction"):
@@ -265,34 +233,67 @@ with tab2:
 
                 for i, row in df.iterrows():
                     text = str(row["brief_text"])
-                    parsed, raw_extract, total_cost, truncated, verification, verify_cost, extracted_ok = extract_and_verify(text)
-                    total_batch_cost += total_cost
+                    is_valid, error_message = validate_brief_input(text)
 
-                    if extracted_ok and parsed:
+                    if not is_valid:
+                        row_result = {
+                            "row": i + 1,
+                            "parsed_ok": False,
+                            "truncated": False,
+                            "validation_flags": f"input rejected: {error_message}",
+                            "assumptions": "",
+                            "raw_response": "",
+                            "cost": 0.0
+                        }
+                        for field in DATA_DICTIONARY.keys():
+                            row_result[field] = "input_error"
+                        results.append(row_result)
+                        progress.progress((i + 1) / len(df))
+                        continue
+
+                    result_text, cost, truncated, api_error = llm_extract(text)
+
+                    if api_error:
+                        row_result = {
+                            "row": i + 1,
+                            "parsed_ok": False,
+                            "truncated": False,
+                            "validation_flags": f"API error: {api_error}",
+                            "assumptions": "",
+                            "raw_response": "",
+                            "cost": 0.0
+                        }
+                        for field in DATA_DICTIONARY.keys():
+                            row_result[field] = "api_error"
+                        results.append(row_result)
+                        progress.progress((i + 1) / len(df))
+                        continue
+
+                    total_batch_cost += cost
+
+                    try:
+                        parsed = json.loads(clean_json_text(result_text))
                         flags = validate_against_dictionary(parsed)
-                        omissions_caught = len(verification["omissions"]) if verification and verification.get("omissions_found") else 0
                         row_result = {
                             "row": i + 1,
                             "parsed_ok": True,
                             "truncated": truncated,
-                            "omissions_caught": omissions_caught,
                             "validation_flags": "; ".join(flags) if flags else "none",
                             "assumptions": "; ".join(parsed.get("assumptions", [])),
                             "raw_response": "",
-                            "cost": round(total_cost, 5)
+                            "cost": round(cost, 5)
                         }
                         for field in DATA_DICTIONARY.keys():
                             row_result[field] = parsed.get(field, "not specified")
-                    else:
+                    except json.JSONDecodeError:
                         row_result = {
                             "row": i + 1,
                             "parsed_ok": False,
                             "truncated": truncated,
-                            "omissions_caught": 0,
                             "validation_flags": "could not parse response" + (" (truncated)" if truncated else ""),
                             "assumptions": "",
-                            "raw_response": raw_extract,
-                            "cost": round(total_cost, 5)
+                            "raw_response": result_text,
+                            "cost": round(cost, 5)
                         }
                         for field in DATA_DICTIONARY.keys():
                             row_result[field] = "parse_error"
@@ -303,14 +304,14 @@ with tab2:
                 results_df = pd.DataFrame(results)
                 st.subheader("Batch results")
 
-                summary_df = results_df[["row", "parsed_ok", "truncated", "omissions_caught", "validation_flags", "cost"]]
+                summary_df = results_df[["row", "parsed_ok", "truncated", "validation_flags", "cost"]]
                 st.dataframe(summary_df, use_container_width=True)
 
-                st.write(f"Total batch cost: ${total_batch_cost:.5f}")
+                st.write(f"Total batch cost: \\${total_batch_cost:.5f}")
 
                 st.subheader("Full details per row")
                 for _, r in results_df.iterrows():
-                    label = f"Row {r['row']} — {'OK' if r['parsed_ok'] else 'PARSE ERROR'}, {r['omissions_caught']} caught by self-check, ${r['cost']}"
+                    label = f"Row {r['row']} — {'OK' if r['parsed_ok'] else 'ERROR'}, \\${r['cost']}"
                     with st.expander(label):
                         st.markdown("**Extracted schema:**")
                         for field in DATA_DICTIONARY.keys():
@@ -319,7 +320,7 @@ with tab2:
                         st.write(r["validation_flags"])
                         st.markdown("**Assumptions:**")
                         st.write(r["assumptions"] if r["assumptions"] else "None")
-                        if not r["parsed_ok"]:
+                        if not r["parsed_ok"] and r["raw_response"]:
                             st.markdown("**Raw response (for debugging):**")
                             st.text(r["raw_response"])
 
