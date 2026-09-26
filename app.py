@@ -54,7 +54,7 @@ DATA_DICTIONARY = {
     },
 }
 
-def build_prompt(brief_text):
+def build_extraction_prompt(brief_text):
     field_list = "\n".join([f'- {name}: allowed values are {info["allowed"]}' for name, info in DATA_DICTIONARY.items()])
     prompt = f"""You are a marketing data analyst. Read the ad brief below and extract a structured target audience description.
 
@@ -86,6 +86,29 @@ Ad brief:
 """
     return prompt
 
+def build_verification_prompt(brief_text, extracted_json):
+    prompt = f"""You are reviewing a colleague's work. They extracted a structured audience schema from an ad brief. Your job is to check their work for one specific kind of mistake: something meaningful mentioned in the brief that got dropped entirely, neither captured in a field value nor mentioned in the assumptions list.
+
+Original ad brief:
+\"\"\"
+{brief_text}
+\"\"\"
+
+Extracted schema:
+{json.dumps(extracted_json, indent=2)}
+
+Check specifically for:
+- A named platform, interest, or demographic detail mentioned in the brief that doesn't appear anywhere in the extracted fields or assumptions
+- A stated fact that was ignored rather than mapped or flagged
+
+Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
+{{
+  "omissions_found": true or false,
+  "omissions": ["one short sentence per omission found, empty list if none"]
+}}
+"""
+    return prompt
+
 def clean_json_text(text):
     text = text.strip()
     if text.startswith("```"):
@@ -94,21 +117,44 @@ def clean_json_text(text):
             text = text[4:]
     return text.strip()
 
-def llm_extract(brief_text):
-    prompt = build_prompt(brief_text)
+def call_claude(prompt, max_tokens):
     response = client.messages.create(
         model=MODEL,
-        max_tokens=1500,
+        max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}]
     )
     input_tokens = response.usage.input_tokens
     output_tokens = response.usage.output_tokens
     cost = (input_tokens / 1000 * INPUT_COST_PER_1K) + (output_tokens / 1000 * OUTPUT_COST_PER_1K)
-
     text_blocks = [block.text for block in response.content if block.type == "text"]
     result_text = "\n".join(text_blocks)
     truncated = response.stop_reason == "max_tokens"
     return result_text, cost, truncated
+
+def extract_and_verify(brief_text):
+    extract_prompt = build_extraction_prompt(brief_text)
+    extract_result, extract_cost, extract_truncated = call_claude(extract_prompt, 1500)
+
+    try:
+        parsed = json.loads(clean_json_text(extract_result))
+    except json.JSONDecodeError:
+        return None, extract_result, extract_cost, extract_truncated, None, 0, False
+
+    verify_prompt = build_verification_prompt(brief_text, parsed)
+    verify_result, verify_cost, verify_truncated = call_claude(verify_prompt, 500)
+
+    try:
+        verification = json.loads(clean_json_text(verify_result))
+    except json.JSONDecodeError:
+        verification = {"omissions_found": False, "omissions": []}
+
+    if verification.get("omissions_found") and verification.get("omissions"):
+        existing_assumptions = parsed.get("assumptions", [])
+        caught_by_check = [f"[caught by self-check] {o}" for o in verification["omissions"]]
+        parsed["assumptions"] = existing_assumptions + caught_by_check
+
+    total_cost = extract_cost + verify_cost
+    return parsed, extract_result, total_cost, extract_truncated or verify_truncated, verification, verify_cost, True
 
 def validate_against_dictionary(parsed_json):
     flags = []
@@ -119,7 +165,7 @@ def validate_against_dictionary(parsed_json):
     return flags
 
 st.title("Ad Brief to Audience Schema Translator")
-st.write("Extract a structured target audience description mapped to the IAB Tech Lab Audience Taxonomy 1.1, one brief at a time or in bulk.")
+st.write("Extract a structured target audience description mapped to the IAB Tech Lab Audience Taxonomy 1.1. Every extraction is automatically self-checked for anything the model may have missed.")
 
 tab1, tab2 = st.tabs(["Single brief", "Batch mode"])
 
@@ -135,23 +181,44 @@ with tab1:
         if brief_input.strip() == "":
             st.warning("Paste an ad brief first.")
         else:
-            with st.spinner("Extracting with Claude..."):
-                result_text, cost, truncated = llm_extract(brief_input)
-
-            st.session_state.total_cost += cost
-            st.session_state.scan_count += 1
-
-            if truncated:
-                st.warning("Response was cut off before completion. Results below may be incomplete.")
+            with st.spinner("Step 1 of 2: Extracting structured schema..."):
+                extract_prompt = build_extraction_prompt(brief_input)
+                extract_result, extract_cost, extract_truncated = call_claude(extract_prompt, 1500)
 
             try:
-                parsed = json.loads(clean_json_text(result_text))
+                parsed = json.loads(clean_json_text(extract_result))
             except json.JSONDecodeError:
-                st.error("Claude did not return valid JSON. Raw response below.")
-                st.text(result_text)
+                st.error("Claude did not return valid JSON on extraction. Raw response below.")
+                st.text(extract_result)
                 parsed = None
 
+            verification = None
+            verify_cost = 0
+
             if parsed:
+                with st.spinner("Step 2 of 2: Self-checking for anything missed..."):
+                    verify_prompt = build_verification_prompt(brief_input, parsed)
+                    verify_result, verify_cost, verify_truncated = call_claude(verify_prompt, 500)
+                try:
+                    verification = json.loads(clean_json_text(verify_result))
+                except json.JSONDecodeError:
+                    verification = {"omissions_found": False, "omissions": []}
+
+                if verification.get("omissions_found") and verification.get("omissions"):
+                    existing_assumptions = parsed.get("assumptions", [])
+                    caught_by_check = [f"[caught by self-check] {o}" for o in verification["omissions"]]
+                    parsed["assumptions"] = existing_assumptions + caught_by_check
+
+            total_cost = extract_cost + verify_cost
+            st.session_state.total_cost += total_cost
+            st.session_state.scan_count += 1
+
+            if parsed:
+                if verification and verification.get("omissions_found"):
+                    st.info(f"Self-check caught {len(verification['omissions'])} thing(s) the first pass missed. See assumptions below.")
+                else:
+                    st.success("Self-check found no omissions.")
+
                 st.subheader("Validation against data dictionary")
                 flags = validate_against_dictionary(parsed)
                 if flags:
@@ -177,12 +244,12 @@ with tab1:
                     st.write("No assumptions flagged.")
 
             st.subheader("Cost tracking")
-            st.write(f"This extraction cost approximately ${cost:.5f}")
+            st.write(f"Extraction call: \\${extract_cost:.5f}, self-check call: \\${verify_cost:.5f}, total: \\${total_cost:.5f}")
             st.write(f"Total scans this session: {st.session_state.scan_count}")
             st.write(f"Total estimated cost this session: ${st.session_state.total_cost:.5f}")
 
 with tab2:
-    st.write("Upload a CSV file with one column named `brief_text`, one ad brief per row.")
+    st.write("Upload a CSV file with one column named `brief_text`, one ad brief per row. Each row runs through extraction and self-check.")
     uploaded_file = st.file_uploader("Upload CSV", type="csv")
 
     if uploaded_file is not None:
@@ -198,32 +265,34 @@ with tab2:
 
                 for i, row in df.iterrows():
                     text = str(row["brief_text"])
-                    result_text, cost, truncated = llm_extract(text)
-                    total_batch_cost += cost
+                    parsed, raw_extract, total_cost, truncated, verification, verify_cost, extracted_ok = extract_and_verify(text)
+                    total_batch_cost += total_cost
 
-                    try:
-                        parsed = json.loads(clean_json_text(result_text))
+                    if extracted_ok and parsed:
                         flags = validate_against_dictionary(parsed)
+                        omissions_caught = len(verification["omissions"]) if verification and verification.get("omissions_found") else 0
                         row_result = {
                             "row": i + 1,
                             "parsed_ok": True,
                             "truncated": truncated,
+                            "omissions_caught": omissions_caught,
                             "validation_flags": "; ".join(flags) if flags else "none",
                             "assumptions": "; ".join(parsed.get("assumptions", [])),
                             "raw_response": "",
-                            "cost": round(cost, 5)
+                            "cost": round(total_cost, 5)
                         }
                         for field in DATA_DICTIONARY.keys():
                             row_result[field] = parsed.get(field, "not specified")
-                    except json.JSONDecodeError:
+                    else:
                         row_result = {
                             "row": i + 1,
                             "parsed_ok": False,
                             "truncated": truncated,
+                            "omissions_caught": 0,
                             "validation_flags": "could not parse response" + (" (truncated)" if truncated else ""),
                             "assumptions": "",
-                            "raw_response": result_text,
-                            "cost": round(cost, 5)
+                            "raw_response": raw_extract,
+                            "cost": round(total_cost, 5)
                         }
                         for field in DATA_DICTIONARY.keys():
                             row_result[field] = "parse_error"
@@ -234,14 +303,14 @@ with tab2:
                 results_df = pd.DataFrame(results)
                 st.subheader("Batch results")
 
-                summary_df = results_df[["row", "parsed_ok", "truncated", "validation_flags", "cost"]]
+                summary_df = results_df[["row", "parsed_ok", "truncated", "omissions_caught", "validation_flags", "cost"]]
                 st.dataframe(summary_df, use_container_width=True)
 
                 st.write(f"Total batch cost: ${total_batch_cost:.5f}")
 
                 st.subheader("Full details per row")
                 for _, r in results_df.iterrows():
-                    label = f"Row {r['row']} — {'OK' if r['parsed_ok'] else 'PARSE ERROR'}, ${r['cost']}"
+                    label = f"Row {r['row']} — {'OK' if r['parsed_ok'] else 'PARSE ERROR'}, {r['omissions_caught']} caught by self-check, ${r['cost']}"
                     with st.expander(label):
                         st.markdown("**Extracted schema:**")
                         for field in DATA_DICTIONARY.keys():
