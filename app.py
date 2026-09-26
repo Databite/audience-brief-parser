@@ -18,6 +18,8 @@ OUTPUT_COST_PER_1K = 0.015
 MIN_BRIEF_LENGTH = 15
 MAX_BRIEF_LENGTH = 3000
 MAX_BATCH_ROWS = 50
+SESSION_COST_CAP = 2.00
+ESTIMATED_COST_PER_BRIEF = 0.015
 
 DATA_DICTIONARY = {
     "age_range": {
@@ -59,7 +61,6 @@ DATA_DICTIONARY = {
 }
 
 def validate_brief_input(text):
-    """Returns (is_valid, error_message). Checks length bounds before any API call is made."""
     stripped = text.strip()
     if len(stripped) == 0:
         return False, "Please paste an ad brief before submitting."
@@ -110,7 +111,6 @@ def clean_json_text(text):
     return text.strip()
 
 def call_claude(prompt, max_tokens):
-    """Returns (result_text, cost, truncated, error_message). error_message is None on success."""
     try:
         response = client.messages.create(
             model=MODEL,
@@ -146,73 +146,80 @@ def validate_against_dictionary(parsed_json):
             flags.append(f"'{field}' returned value '{value}', which is not in the allowed list {info['allowed']}")
     return flags
 
+if "total_cost" not in st.session_state:
+    st.session_state.total_cost = 0.0
+if "scan_count" not in st.session_state:
+    st.session_state.scan_count = 0
+
+def remaining_budget():
+    return max(0.0, SESSION_COST_CAP - st.session_state.total_cost)
+
 st.title("Ad Brief to Audience Schema Translator")
 st.write("Extract a structured target audience description mapped to the IAB Tech Lab Audience Taxonomy 1.1.")
 st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. This is a prototype, not a validated production tool, always sanity-check the output before using it for real targeting decisions.")
+st.caption(f"Session usage cap: \\${SESSION_COST_CAP:.2f}. Used so far: \\${st.session_state.total_cost:.5f}. Remaining: \\${remaining_budget():.5f}.")
 
 tab1, tab2 = st.tabs(["Single brief", "Batch mode"])
 
 with tab1:
-    if "total_cost" not in st.session_state:
-        st.session_state.total_cost = 0.0
-    if "scan_count" not in st.session_state:
-        st.session_state.scan_count = 0
-
     brief_input = st.text_area("Ad brief", height=150)
 
     if st.button("Extract audience schema"):
-        is_valid, error_message = validate_brief_input(brief_input)
-        if not is_valid:
-            st.warning(error_message)
+        if remaining_budget() <= 0:
+            st.error(f"This session has reached its \\${SESSION_COST_CAP:.2f} usage cap. Please start a new session to continue.")
         else:
-            with st.spinner("Extracting with Claude..."):
-                result_text, cost, truncated, api_error = llm_extract(brief_input)
-
-            if api_error:
-                st.error(api_error)
+            is_valid, error_message = validate_brief_input(brief_input)
+            if not is_valid:
+                st.warning(error_message)
             else:
-                st.session_state.total_cost += cost
-                st.session_state.scan_count += 1
+                with st.spinner("Extracting with Claude..."):
+                    result_text, cost, truncated, api_error = llm_extract(brief_input)
 
-                if truncated:
-                    st.warning("Response was cut off before completion. Results below may be incomplete.")
+                if api_error:
+                    st.error(api_error)
+                else:
+                    st.session_state.total_cost += cost
+                    st.session_state.scan_count += 1
 
-                try:
-                    parsed = json.loads(clean_json_text(result_text))
-                except json.JSONDecodeError:
-                    st.error("Claude did not return valid JSON. Raw response below.")
-                    st.text(result_text)
-                    parsed = None
+                    if truncated:
+                        st.warning("Response was cut off before completion. Results below may be incomplete.")
 
-                if parsed:
-                    st.subheader("Validation against data dictionary")
-                    flags = validate_against_dictionary(parsed)
-                    if flags:
-                        for flag in flags:
-                            st.error(flag)
-                    else:
-                        st.success("All returned values match the allowed data dictionary values.")
+                    try:
+                        parsed = json.loads(clean_json_text(result_text))
+                    except json.JSONDecodeError:
+                        st.error("Claude did not return valid JSON. Raw response below.")
+                        st.text(result_text)
+                        parsed = None
 
-                    st.subheader("1st-party attributes (query your own CRM or customer data)")
-                    first_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "1st_party"]
-                    st.table(pd.DataFrame(first_party_rows, columns=["Attribute", "Value"]))
+                    if parsed:
+                        st.subheader("Validation against data dictionary")
+                        flags = validate_against_dictionary(parsed)
+                        if flags:
+                            for flag in flags:
+                                st.error(flag)
+                        else:
+                            st.success("All returned values match the allowed data dictionary values.")
 
-                    st.subheader("3rd-party attributes (query external data providers)")
-                    third_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "3rd_party"]
-                    st.table(pd.DataFrame(third_party_rows, columns=["Attribute", "Value"]))
+                        st.subheader("1st-party attributes (query your own CRM or customer data)")
+                        first_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "1st_party"]
+                        st.table(pd.DataFrame(first_party_rows, columns=["Attribute", "Value"]))
 
-                    assumptions = parsed.get("assumptions", [])
-                    st.subheader("Assumptions made by the model")
-                    if assumptions:
-                        for a in assumptions:
-                            st.warning(a)
-                    else:
-                        st.write("No assumptions flagged.")
+                        st.subheader("3rd-party attributes (query external data providers)")
+                        third_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "3rd_party"]
+                        st.table(pd.DataFrame(third_party_rows, columns=["Attribute", "Value"]))
 
-                st.subheader("Cost tracking")
-                st.write(f"This extraction cost approximately \\${cost:.5f}")
-                st.write(f"Total scans this session: {st.session_state.scan_count}")
-                st.write(f"Total estimated cost this session: \\${st.session_state.total_cost:.5f}")
+                        assumptions = parsed.get("assumptions", [])
+                        st.subheader("Assumptions made by the model")
+                        if assumptions:
+                            for a in assumptions:
+                                st.warning(a)
+                        else:
+                            st.write("No assumptions flagged.")
+
+                    st.subheader("Cost tracking")
+                    st.write(f"This extraction cost approximately \\${cost:.5f}")
+                    st.write(f"Total scans this session: {st.session_state.scan_count}")
+                    st.write(f"Total estimated cost this session: \\${st.session_state.total_cost:.5f}")
 
 with tab2:
     st.write(f"Upload a CSV file with one column named `brief_text`, one ad brief per row. Maximum {MAX_BATCH_ROWS} rows per batch.")
@@ -225,13 +232,22 @@ with tab2:
         elif len(df) > MAX_BATCH_ROWS:
             st.error(f"This file has {len(df)} rows, which exceeds the {MAX_BATCH_ROWS} row limit for this prototype. Please split it into smaller batches.")
         else:
-            st.write(f"Found {len(df)} briefs in this file.")
-            if st.button("Run batch extraction"):
+            estimated_batch_cost = len(df) * ESTIMATED_COST_PER_BRIEF
+            st.write(f"Found {len(df)} briefs in this file. Estimated cost: \\${estimated_batch_cost:.4f}. Remaining session budget: \\${remaining_budget():.4f}.")
+
+            if estimated_batch_cost > remaining_budget():
+                st.error(f"This batch's estimated cost (\\${estimated_batch_cost:.4f}) exceeds your remaining session budget (\\${remaining_budget():.4f}). Reduce the number of rows or start a new session.")
+            elif st.button("Run batch extraction"):
                 results = []
                 total_batch_cost = 0.0
                 progress = st.progress(0)
+                cap_hit_mid_batch = False
 
                 for i, row in df.iterrows():
+                    if remaining_budget() <= 0:
+                        cap_hit_mid_batch = True
+                        break
+
                     text = str(row["brief_text"])
                     is_valid, error_message = validate_brief_input(text)
 
@@ -269,6 +285,7 @@ with tab2:
                         progress.progress((i + 1) / len(df))
                         continue
 
+                    st.session_state.total_cost += cost
                     total_batch_cost += cost
 
                     try:
@@ -300,6 +317,9 @@ with tab2:
 
                     results.append(row_result)
                     progress.progress((i + 1) / len(df))
+
+                if cap_hit_mid_batch:
+                    st.warning(f"Session usage cap reached partway through this batch. {len(results)} of {len(df)} rows were processed before stopping.")
 
                 results_df = pd.DataFrame(results)
                 st.subheader("Batch results")
