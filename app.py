@@ -3,6 +3,7 @@ from anthropic import Anthropic
 import os
 import json
 import pandas as pd
+import io
 
 try:
     api_key = st.secrets["ANTHROPIC_API_KEY"]
@@ -13,14 +14,6 @@ MODEL = "claude-sonnet-5"
 
 INPUT_COST_PER_1K = 0.003
 OUTPUT_COST_PER_1K = 0.015
-
-# Demographic and interest values below are pulled directly from the
-# IAB Tech Lab Audience Taxonomy 1.1, the ad industry's actual public
-# standard for describing audience segments. Source:
-# https://github.com/InteractiveAdvertisingBureau/Taxonomies
-# Purchase history, loyalty tier, and email engagement have no public
-# standard, since that's internal CRM data unique to each company, so
-# those are illustrative placeholders, not taxonomy-grounded values.
 
 DATA_DICTIONARY = {
     "age_range": {
@@ -71,7 +64,8 @@ Only use these fields, and only these allowed values for each field:
 Rules:
 1. If the brief does not give enough information to confidently pick a value for a field, use the exact string "not specified" for that field. Do not guess.
 2. If you infer a value from indirect language, for example inferring household_income from a phrase like "disposable income", still provide the value, but also list that inference in the assumptions list below.
-3. Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
+3. If the brief mentions something relevant that has no matching allowed value in the schema, note it explicitly in the assumptions list rather than dropping it silently.
+4. Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
 {{
   "age_range": "...",
   "gender": "...",
@@ -113,7 +107,8 @@ def llm_extract(brief_text):
 
     text_blocks = [block.text for block in response.content if block.type == "text"]
     result_text = "\n".join(text_blocks)
-    return result_text, cost
+    truncated = response.stop_reason == "max_tokens"
+    return result_text, cost, truncated
 
 def validate_against_dictionary(parsed_json):
     flags = []
@@ -124,58 +119,126 @@ def validate_against_dictionary(parsed_json):
     return flags
 
 st.title("Ad Brief to Audience Schema Translator")
-st.write("Paste an ad brief below. This extracts a structured target audience description mapped to the IAB Tech Lab Audience Taxonomy 1.1, and shows which attributes come from 1st-party data versus 3rd-party data.")
+st.write("Extract a structured target audience description mapped to the IAB Tech Lab Audience Taxonomy 1.1, one brief at a time or in bulk.")
 
-if "total_cost" not in st.session_state:
-    st.session_state.total_cost = 0.0
-if "scan_count" not in st.session_state:
-    st.session_state.scan_count = 0
+tab1, tab2 = st.tabs(["Single brief", "Batch mode"])
 
-brief_input = st.text_area("Ad brief", height=150)
+with tab1:
+    if "total_cost" not in st.session_state:
+        st.session_state.total_cost = 0.0
+    if "scan_count" not in st.session_state:
+        st.session_state.scan_count = 0
 
-if st.button("Extract audience schema"):
-    if brief_input.strip() == "":
-        st.warning("Paste an ad brief first.")
-    else:
-        with st.spinner("Extracting with Claude..."):
-            result_text, cost = llm_extract(brief_input)
+    brief_input = st.text_area("Ad brief", height=150)
 
-        st.session_state.total_cost += cost
-        st.session_state.scan_count += 1
+    if st.button("Extract audience schema"):
+        if brief_input.strip() == "":
+            st.warning("Paste an ad brief first.")
+        else:
+            with st.spinner("Extracting with Claude..."):
+                result_text, cost, truncated = llm_extract(brief_input)
 
-        try:
-            parsed = json.loads(clean_json_text(result_text))
-        except json.JSONDecodeError:
-            st.error("Claude did not return valid JSON. Raw response below.")
-            st.text(result_text)
-            parsed = None
+            st.session_state.total_cost += cost
+            st.session_state.scan_count += 1
 
-        if parsed:
-            st.subheader("Validation against data dictionary")
-            flags = validate_against_dictionary(parsed)
-            if flags:
-                for flag in flags:
-                    st.error(flag)
-            else:
-                st.success("All returned values match the allowed data dictionary values.")
+            if truncated:
+                st.warning("Response was cut off before completion. Results below may be incomplete.")
 
-            st.subheader("1st-party attributes (query your own CRM or customer data)")
-            first_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "1st_party"]
-            st.table(pd.DataFrame(first_party_rows, columns=["Attribute", "Value"]))
+            try:
+                parsed = json.loads(clean_json_text(result_text))
+            except json.JSONDecodeError:
+                st.error("Claude did not return valid JSON. Raw response below.")
+                st.text(result_text)
+                parsed = None
 
-            st.subheader("3rd-party attributes (query external data providers)")
-            third_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "3rd_party"]
-            st.table(pd.DataFrame(third_party_rows, columns=["Attribute", "Value"]))
+            if parsed:
+                st.subheader("Validation against data dictionary")
+                flags = validate_against_dictionary(parsed)
+                if flags:
+                    for flag in flags:
+                        st.error(flag)
+                else:
+                    st.success("All returned values match the allowed data dictionary values.")
 
-            assumptions = parsed.get("assumptions", [])
-            st.subheader("Assumptions made by the model")
-            if assumptions:
-                for a in assumptions:
-                    st.warning(a)
-            else:
-                st.write("No assumptions flagged.")
+                st.subheader("1st-party attributes (query your own CRM or customer data)")
+                first_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "1st_party"]
+                st.table(pd.DataFrame(first_party_rows, columns=["Attribute", "Value"]))
 
-        st.subheader("Cost tracking")
-        st.write(f"This extraction cost approximately ${cost:.5f}")
-        st.write(f"Total scans this session: {st.session_state.scan_count}")
-        st.write(f"Total estimated cost this session: ${st.session_state.total_cost:.5f}")
+                st.subheader("3rd-party attributes (query external data providers)")
+                third_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "3rd_party"]
+                st.table(pd.DataFrame(third_party_rows, columns=["Attribute", "Value"]))
+
+                assumptions = parsed.get("assumptions", [])
+                st.subheader("Assumptions made by the model")
+                if assumptions:
+                    for a in assumptions:
+                        st.warning(a)
+                else:
+                    st.write("No assumptions flagged.")
+
+            st.subheader("Cost tracking")
+            st.write(f"This extraction cost approximately ${cost:.5f}")
+            st.write(f"Total scans this session: {st.session_state.scan_count}")
+            st.write(f"Total estimated cost this session: ${st.session_state.total_cost:.5f}")
+
+with tab2:
+    st.write("Upload a CSV file with one column named `brief_text`, one ad brief per row.")
+    uploaded_file = st.file_uploader("Upload CSV", type="csv")
+
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        if "brief_text" not in df.columns:
+            st.error("Your CSV must have a column named 'brief_text'.")
+        else:
+            st.write(f"Found {len(df)} briefs in this file.")
+            if st.button("Run batch extraction"):
+                results = []
+                total_batch_cost = 0.0
+                progress = st.progress(0)
+
+                for i, row in df.iterrows():
+                    text = str(row["brief_text"])
+                    result_text, cost, truncated = llm_extract(text)
+                    total_batch_cost += cost
+
+                    try:
+                        parsed = json.loads(clean_json_text(result_text))
+                        flags = validate_against_dictionary(parsed)
+                        row_result = {
+                            "row": i + 1,
+                            "parsed_ok": True,
+                            "truncated": truncated,
+                            "validation_flags": "; ".join(flags) if flags else "none",
+                            "assumptions": "; ".join(parsed.get("assumptions", [])),
+                            "cost": round(cost, 5)
+                        }
+                        for field in DATA_DICTIONARY.keys():
+                            row_result[field] = parsed.get(field, "not specified")
+                    except json.JSONDecodeError:
+                        row_result = {
+                            "row": i + 1,
+                            "parsed_ok": False,
+                            "truncated": truncated,
+                            "validation_flags": "could not parse response",
+                            "assumptions": "",
+                            "cost": round(cost, 5)
+                        }
+                        for field in DATA_DICTIONARY.keys():
+                            row_result[field] = "parse_error"
+
+                    results.append(row_result)
+                    progress.progress((i + 1) / len(df))
+
+                results_df = pd.DataFrame(results)
+                st.subheader("Batch results")
+                st.dataframe(results_df)
+                st.write(f"Total batch cost: ${total_batch_cost:.5f}")
+
+                csv_buffer = io.StringIO()
+                results_df.to_csv(csv_buffer, index=False)
+                st.download_button(
+                    "Download results as CSV",
+                    csv_buffer.getvalue(),
+                    "batch_results.csv",
+                    "text/csv"
+                )
