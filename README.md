@@ -24,6 +24,14 @@ First-party fields (purchase history segment, loyalty tier, email engagement) ar
 
 This prototype does not connect to any real data provider or CRM. It stops at producing a clean, validated, structured query intent. Connecting that output to actual data sources (a real customer database, a licensed third-party data provider) is a separate integration project.
 
+## Known limitations
+
+Testing surfaced two real gaps worth flagging for anyone extending this:
+
+1. **Truncated responses at low token limits.** With the original `max_tokens` setting, longer briefs occasionally produced incomplete JSON that failed to parse. Raising the limit resolved it for the briefs tested here, but a production version should handle a truncated or malformed response gracefully (retry, or surface a partial result) rather than just failing.
+
+2. **Signals can be silently dropped instead of flagged.** When a brief mentions something outside the allowed schema (for example, a social platform not in the data dictionary), the model sometimes omits it entirely rather than either forcing an invalid value or listing it in the assumptions section. The validation layer catches invalid values, but it does not currently catch omissions. A stricter prompt instruction, or a completeness check that compares mentioned entities in the brief against what made it into the output, would close this gap.
+
 ## Tech stack
 
 - Python
