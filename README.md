@@ -1,11 +1,8 @@
-
-## Live demo
- 
-https://audience-brief-parser-4dwtsrouwolbwzqdqsa6sb.streamlit.app/
-
 # Ad Brief to Audience Schema Translator
 
-A prototype tool that converts loosely written ad campaign briefs into a structured, validated target audience description, so it can be handed off to a data or ML team to query against real first-party and third-party data sources.
+**Live demo:** https://audience-brief-parser-4dwtsrouwolbwzqdqsa6sb.streamlit.app/
+
+A tool that converts loosely written ad campaign briefs into a structured, validated target audience description, so it can be handed off to a data or ML team to query against real first-party and third-party data sources.
 
 ## The problem this solves
 
@@ -14,40 +11,44 @@ An ad brief typically describes a target audience in plain human language, for e
 ## What it does
 
 1. Takes a free-text ad brief as input.
-2. **Extraction pass:** sends it to Claude with a strict instruction to extract only fields and values from a predefined data dictionary, never to invent new categories.
-3. **Self-check pass:** a second Claude call reviews the extracted output against the original brief, specifically checking for anything mentioned in the brief that got dropped entirely, neither captured in a field value nor flagged as an assumption. Anything it catches gets added to the assumptions list, tagged `[caught by self-check]`.
-4. Validates every returned value against the allowed list for that field, flagging anything that doesn't match.
-5. Splits the results into two groups: first-party attributes (would be queried from the company's own CRM or customer data) and third-party attributes (would be queried from an external data provider).
-6. Surfaces all assumptions, both the ones the model flagged during extraction and any additional ones the self-check pass caught.
-
-This two-call pattern, one call does the work, a second call checks the first call's work against the source, is a small example of agentic-style verification: rather than trusting a single model call's output at face value, the system checks its own work before returning a result.
+2. Sends it to Claude with a strict instruction to extract only fields and values from a predefined data dictionary, never to invent new categories.
+3. Validates every returned value against the allowed list for that field, flagging anything that doesn't match.
+4. Splits the results into two groups: first-party attributes (would be queried from the company's own CRM or customer data) and third-party attributes (would be queried from an external data provider).
+5. Surfaces any assumptions the model made when inferring a value from indirect language.
 
 ## Batch mode
 
-Upload a CSV with a `brief_text` column to process multiple briefs at once. Results show a compact summary table plus an expandable detail view per row, with a downloadable CSV of the full output.
+Upload a CSV with a brief_text column (up to 50 rows) to process multiple briefs at once. Before running, the tool estimates the batch's likely cost against your remaining session budget and refuses to start if it would exceed it, rather than running out of budget partway through. Results show a compact summary table plus an expandable detail view per row, with a downloadable CSV of the full output.
+
+## Built for real-world use, not just a demo
+
+Beyond the core extraction logic, this includes several things a tool needs before a stranger can use it safely:
+
+- **Input validation.** Empty, too-short, or excessively long briefs are rejected with a clear message before any API call is made, so no cost is wasted on invalid input.
+- **Graceful failure handling.** If the AI service is down, rate-limited, or returns an error, the user sees a clear, readable message, never a raw Python traceback.
+- **A session cost cap.** Usage is capped per session ($2.00 by default) to bound worst-case cost exposure from a single visitor, with the cap enforced before both single extractions and batch runs.
+- **A first-time user explainer.** The page leads with a one-line plain-language description of what the tool does; a collapsed section covers the deeper mechanics (the industry-standard schema, the two data categories, what the tool doesn't do) for anyone who wants it.
+- **Operator-side usage logging.** Every extraction attempt (single or batch, successful or failed) is logged to a Google Sheet outside the user's browser session, so usage can be reviewed later even after the visitor's session ends. Logging is best-effort: if it fails for any reason, it fails silently and never blocks or breaks the user's actual request.
 
 ## Grounding in a real industry standard
 
-The demographic and interest fields in this prototype are pulled directly from the [IAB Tech Lab Audience Taxonomy 1.1](https://github.com/InteractiveAdvertisingBureau/Taxonomies), the ad industry's actual public standard for describing audience segments. This was a deliberate choice: rather than inventing plausible-sounding categories, the schema reflects real, citable industry vocabulary.
+The demographic and interest fields in this prototype are pulled directly from the [IAB Tech Lab Audience Taxonomy 1.1](https://github.com/InteractiveAdvertisingBureau/Taxonomies), the ad industry's actual public standard for describing audience segments, rather than invented categories.
 
 First-party fields (purchase history segment, loyalty tier, email engagement) are illustrative placeholders, since no public standard exists for internal CRM segmentation, that data model is proprietary to each company.
 
 ## Known limitations
 
-Testing surfaced two real gaps worth flagging for anyone extending this:
-
-1. **Truncated responses at low token limits.** Longer briefs, or briefs generating longer self-check output, occasionally produced incomplete JSON that failed to parse. The app now detects this explicitly (checking the API's `stop_reason`) and flags truncated results rather than silently showing an incomplete answer, but the underlying risk, a response exceeding the token budget, isn't fully eliminated by raising the limit alone.
-
-2. **Signals can still be missed, though less often now.** Earlier testing found the model sometimes dropped a mentioned signal (a platform not in the schema, for example) without flagging it. This is now addressed two ways: a stricter extraction prompt, and a second self-check call that reviews the extraction against the brief. In testing, the prompt fix alone resolved the known case; the self-check call exists as a safety net for cases the prompt fix doesn't catch on its own.
-
-## What this is not
-
-This prototype does not connect to any real data provider or CRM. It stops at producing a clean, validated, structured query intent. Connecting that output to actual data sources (a real customer database, a licensed third-party data provider) is a separate integration project.
+1. **Truncated responses at low token limits.** Longer briefs occasionally produced incomplete JSON in earlier testing. The token limit was raised and the app now detects truncation explicitly via the API's stop_reason, flagging it rather than silently returning an incomplete result.
+2. **No persistence of results.** Usage is logged (see above), but individual extraction results themselves are not saved anywhere; closing the browser tab loses them unless downloaded first.
+3. **No real data source connections.** This produces a validated query intent only, it does not call any actual CRM, data warehouse, or third-party data provider.
+4. **Session-based cost cap, not account-based.** The $2.00 cap resets if a visitor opens a new browser session, so it bounds cost per session, not per person.
 
 ## Tech stack
 
 - Python
 - Streamlit (interface)
-- Anthropic API (Claude) for the extraction and self-check layers
+- Anthropic API (Claude) for extraction
 - Pandas (display formatting)
+- gspread + Google Sheets API (operator-side usage logging)
 
+See HANDOFF.md for engineering handoff notes, open questions, and what this prototype deliberately doesn't solve.
