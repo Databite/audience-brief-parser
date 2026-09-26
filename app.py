@@ -4,6 +4,9 @@ import os
 import json
 import pandas as pd
 import io
+import datetime
+import gspread
+from google.oauth2.service_account import Credentials
 
 st.set_page_config(
     page_title="Ad Brief to Audience Schema Translator",
@@ -73,6 +76,32 @@ MAX_BRIEF_LENGTH = 3000
 MAX_BATCH_ROWS = 50
 SESSION_COST_CAP = 2.00
 ESTIMATED_COST_PER_BRIEF = 0.015
+
+SERVICE_ACCOUNT_FILE = "audience-parser-logging-eb22d4a5e70c.json"
+SHEET_ID = "1QcuH2mH2HHtvC5PtCDRwqp7yK-u09WT6qZh91pKk4og"
+SHEET_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+
+def get_sheet_client():
+    try:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=SHEET_SCOPES)
+    except Exception:
+        creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SHEET_SCOPES)
+    return gspread.authorize(creds)
+
+def log_event(event_type, cost, success):
+    """Best-effort logging. Never let a logging failure break the user's actual request."""
+    try:
+        gc = get_sheet_client()
+        sheet = gc.open_by_key(SHEET_ID).sheet1
+        sheet.append_row([
+            datetime.datetime.utcnow().isoformat(),
+            event_type,
+            round(cost, 5),
+            success
+        ])
+    except Exception:
+        pass
 
 DATA_DICTIONARY = {
     "age_range": {
@@ -242,6 +271,7 @@ with tab1:
 
                 if api_error:
                     st.error(api_error)
+                    log_event("single_extraction", 0.0, False)
                 else:
                     st.session_state.total_cost += cost
                     st.session_state.scan_count += 1
@@ -251,10 +281,12 @@ with tab1:
 
                     try:
                         parsed = json.loads(clean_json_text(result_text))
+                        log_event("single_extraction", cost, True)
                     except json.JSONDecodeError:
                         st.error("Claude did not return valid JSON. Raw response below.")
                         st.text(result_text)
                         parsed = None
+                        log_event("single_extraction", cost, False)
 
                     if parsed:
                         st.subheader("Validation against data dictionary")
@@ -347,6 +379,7 @@ with tab2:
                         for field in DATA_DICTIONARY.keys():
                             row_result[field] = "api_error"
                         results.append(row_result)
+                        log_event("batch_row", 0.0, False)
                         progress.progress((i + 1) / len(df))
                         continue
 
@@ -367,6 +400,7 @@ with tab2:
                         }
                         for field in DATA_DICTIONARY.keys():
                             row_result[field] = parsed.get(field, "not specified")
+                        log_event("batch_row", cost, True)
                     except json.JSONDecodeError:
                         row_result = {
                             "row": i + 1,
@@ -379,6 +413,7 @@ with tab2:
                         }
                         for field in DATA_DICTIONARY.keys():
                             row_result[field] = "parse_error"
+                        log_event("batch_row", cost, False)
 
                     results.append(row_result)
                     progress.progress((i + 1) / len(df))
