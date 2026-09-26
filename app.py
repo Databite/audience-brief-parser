@@ -4,7 +4,11 @@ import os
 import json
 import pandas as pd
 
-client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+try:
+    api_key = st.secrets["ANTHROPIC_API_KEY"]
+except Exception:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+client = Anthropic(api_key=api_key)
 MODEL = "claude-sonnet-5"
 
 INPUT_COST_PER_1K = 0.003
@@ -100,7 +104,7 @@ def llm_extract(brief_text):
     prompt = build_prompt(brief_text)
     response = client.messages.create(
         model=MODEL,
-        max_tokens=500,
+        max_tokens=1000,
         messages=[{"role": "user", "content": prompt}]
     )
     input_tokens = response.usage.input_tokens
