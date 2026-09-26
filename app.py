@@ -155,10 +155,20 @@ def remaining_budget():
     return max(0.0, SESSION_COST_CAP - st.session_state.total_cost)
 
 st.title("Ad Brief to Audience Schema Translator")
-st.write("Extract a structured target audience description mapped to the IAB Tech Lab Audience Taxonomy 1.1.")
-st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. This is a prototype, not a validated production tool, always sanity-check the output before using it for real targeting decisions.")
-st.caption(f"Session usage cap: \\${SESSION_COST_CAP:.2f}. Used so far: \\${st.session_state.total_cost:.5f}. Remaining: \\${remaining_budget():.5f}.")
+st.write("Turn a plain-language ad brief into a structured audience profile, ready to hand off to your data team.")
 
+with st.expander("How does this actually work? (for the curious)"):
+    st.markdown("""
+**The problem this solves:** Marketers write audience descriptions in plain language, like "environmentally conscious millennials with disposable income." That's not something a data system can search for directly, it needs specific, predefined field values instead.
+
+**What this tool does:** Paste in a plain-language ad brief, and it converts that description into a structured set of fields with real values, things like an age range, an income bracket, and a list of interests, all pulled from a real industry-standard vocabulary rather than made up on the spot.
+
+**Why two categories, "1st-party" and "3rd-party":** Some information (like whether someone already bought from your company before) would come from your own customer records. Other information (like their age range or interests) would typically be purchased from an outside data provider. This tool sorts the results into those two groups, since in a real setting each group is looked up in a completely different place.
+
+**What it doesn't do:** It doesn't actually connect to any real customer database or purchase real audience data, it only produces the structured request you'd hand off to whoever manages those systems.
+""")
+
+st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. This is a prototype, not a validated production tool, always sanity-check the output before using it for real targeting decisions.")
 tab1, tab2 = st.tabs(["Single brief", "Batch mode"])
 
 with tab1:
