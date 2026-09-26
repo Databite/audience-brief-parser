@@ -1,6 +1,6 @@
 # Ad Brief to Audience Schema Translator
 
-A prototype tool that converts loosely written ad campaign briefs into a structured, validated target audience description, so it can be handed off to a data or ML team to query against real first-party and third-party data sources.
+A prototype tool that converts loosely written ad campaign briefs into a structured, validated target audience description, so it can be handed off to a data or ML team to query against real first-party and third-party data sources
 
 ## The problem this solves
 
@@ -33,10 +33,6 @@ This prototype does not connect to any real data provider or CRM. It stops at pr
 
 ## Running it locally
 
-```
-python3 -m venv venv
-source venv/bin/activate
-pip install streamlit anthropic
-export ANTHROPIC_API_KEY="your-key-here"
-streamlit run app.py
-```
+
+**Live demo:** https://audience-brief-parser-4dwtsrouwolbwzqdqsa6sb.streamlit.app/
+
