@@ -5,6 +5,59 @@ import json
 import pandas as pd
 import io
 
+st.set_page_config(
+    page_title="Ad Brief to Audience Schema Translator",
+    page_icon="🎯",
+    layout="centered"
+)
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+}
+
+h1 {
+    font-weight: 700;
+    font-size: 2.1rem !important;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.2rem;
+}
+
+h2, h3 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.stCaption, [data-testid="stCaptionContainer"] {
+    font-size: 0.85rem !important;
+    color: #6b7280 !important;
+}
+
+.stButton > button {
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 0.5rem 1.5rem;
+}
+
+[data-testid="stExpander"] {
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+
+.stTextArea textarea {
+    border-radius: 8px;
+    font-size: 0.95rem;
+}
+
+[data-testid="stMetricValue"] {
+    font-weight: 700;
+}
+</style>
+""", unsafe_allow_html=True)
+
 try:
     api_key = st.secrets["ANTHROPIC_API_KEY"]
 except Exception:
@@ -169,6 +222,8 @@ with st.expander("How does this actually work? (for the curious)"):
 """)
 
 st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. This is a prototype, not a validated production tool, always sanity-check the output before using it for real targeting decisions.")
+st.caption(f"Session usage cap: \\${SESSION_COST_CAP:.2f}. Used so far: \\${st.session_state.total_cost:.5f}. Remaining: \\${remaining_budget():.5f}.")
+
 tab1, tab2 = st.tabs(["Single brief", "Batch mode"])
 
 with tab1:
