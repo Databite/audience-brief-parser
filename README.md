@@ -20,6 +20,12 @@ An ad brief typically describes a target audience in plain human language, for e
 
 Upload a CSV with a brief_text column (up to 50 rows) to process multiple briefs at once. Before running, the tool estimates the batch's likely cost against your remaining session budget and refuses to start if it would exceed it, rather than running out of budget partway through. Results show a compact summary table plus an expandable detail view per row, with a downloadable CSV of the full output.
 
+## Audience persona generator (Premium feature)
+
+After extracting a schema, an optional second step turns it into a short narrative persona, a name, a one-line tagline, a first-person quote, and a day-in-the-life paragraph, grounded strictly in the extracted schema values rather than inventing new detail. This maps to a deliverable boutique agencies already produce for their own clients, so it's built as the flagship Premium-tier feature rather than a generic add-on. See PRICING.md for the reasoning behind that choice.
+
+A sidebar plan selector ("Basic" or "Premium") demonstrates this gating: Basic shows the persona section locked with an explanation, Premium unlocks the button. This selector is a UI simulation for demo purposes only, there's no real user account or billing system behind it, so it isn't real access control. See HANDOFF.md for what real entitlement enforcement would require.
+
 ## Built for real-world use, not just a demo
 
 Beyond the core extraction logic, this includes several things a tool needs before a stranger can use it safely:
@@ -42,6 +48,7 @@ First-party fields (purchase history segment, loyalty tier, email engagement) ar
 2. **No persistence of results.** Usage is logged (see above), but individual extraction results themselves are not saved anywhere; closing the browser tab loses them unless downloaded first.
 3. **No real data source connections.** This produces a validated query intent only, it does not call any actual CRM, data warehouse, or third-party data provider.
 4. **Session-based cost cap, not account-based.** The $2.00 cap resets if a visitor opens a new browser session, so it bounds cost per session, not per person.
+5. **Plan gating is simulated, not enforced.** The Basic/Premium selector is a sidebar dropdown anyone can switch freely, it demonstrates the tiering UX, not real subscription access control. There's no user account system to tie a real plan to.
 
 ## Tech stack
 
@@ -51,4 +58,4 @@ First-party fields (purchase history segment, loyalty tier, email engagement) ar
 - Pandas (display formatting)
 - gspread + Google Sheets API (operator-side usage logging)
 
-See HANDOFF.md for engineering handoff notes, open questions, and what this prototype deliberately doesn't solve.
+See HANDOFF.md for engineering handoff notes, open questions, and what this prototype deliberately doesn't solve. See PRICING.md for the pricing strategy and business model reasoning behind the Basic/Premium split.
