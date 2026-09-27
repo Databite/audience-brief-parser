@@ -77,7 +77,11 @@ OUTPUT_COST_PER_1K = 0.015
 MIN_BRIEF_LENGTH = 15
 MAX_BRIEF_LENGTH = 3000
 MAX_BATCH_ROWS = 50
-SESSION_COST_CAP = 2.00
+# Premium gets a higher session cap than Basic, since a paying Premium user
+# is expected to actually use more of the tool (batch runs, persona
+# generation on top of extraction) than a Basic user testing the waters.
+# Keyed by the same "Basic"/"Premium" strings the plan selector uses.
+PLAN_COST_CAPS = {"Basic": 2.00, "Premium": 5.00}
 ESTIMATED_COST_PER_BRIEF = 0.015
 
 SERVICE_ACCOUNT_FILE = "audience-parser-logging-eb22d4a5e70c.json"
@@ -309,8 +313,23 @@ if "total_cost" not in st.session_state:
 if "scan_count" not in st.session_state:
     st.session_state.scan_count = 0
 
+# Simulates the pricing tier gate for demo purposes. There's no real user
+# account or billing system here, so this isn't real access control, it's a
+# stand-in that lets you toggle between what a Basic vs Premium visitor
+# would see. The `key` argument makes Streamlit persist this choice in
+# st.session_state automatically for the rest of the browser session, the
+# same lifetime as the cost cap and scan count above. This has to run
+# before remaining_budget() below, since that function now reads the plan
+# to pick which cost cap applies.
+st.sidebar.selectbox("Plan (simulated, for demo purposes)", ["Basic", "Premium"], key="user_plan")
+st.sidebar.caption("This selector simulates what a Basic vs Premium subscriber would see. It is not connected to real billing or user accounts.")
+
+def current_cost_cap():
+    """The session cost cap for whichever plan is currently selected."""
+    return PLAN_COST_CAPS[st.session_state.user_plan]
+
 def remaining_budget():
-    return max(0.0, SESSION_COST_CAP - st.session_state.total_cost)
+    return max(0.0, current_cost_cap() - st.session_state.total_cost)
 
 st.title("Ad Brief to Audience Schema Translator")
 st.write("Turn a plain-language ad brief into a structured audience profile, ready to hand off to your data team.")
@@ -328,16 +347,7 @@ with st.expander("How does this actually work? (for the curious)"):
 
 st.warning("This is a public prototype with no privacy policy or data handling agreement in place. Please do not paste real client names, real campaign details, or any other confidential or sensitive information. Use a fictional or sample brief instead.")
 st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. This is a prototype, not a validated production tool, always sanity-check the output before using it for real targeting decisions.")
-st.caption(f"Session usage cap: \\${SESSION_COST_CAP:.2f}. Used so far: \\${st.session_state.total_cost:.5f}. Remaining: \\${remaining_budget():.5f}.")
-
-# Simulates the pricing tier gate for demo purposes. There's no real user
-# account or billing system here, so this isn't real access control, it's a
-# stand-in that lets you toggle between what a Basic vs Premium visitor
-# would see. The `key` argument makes Streamlit persist this choice in
-# st.session_state automatically for the rest of the browser session, the
-# same lifetime as the cost cap and scan count above.
-st.sidebar.selectbox("Plan (simulated, for demo purposes)", ["Basic", "Premium"], key="user_plan")
-st.sidebar.caption("This selector simulates what a Basic vs Premium subscriber would see. It is not connected to real billing or user accounts.")
+st.caption(f"Session usage cap ({st.session_state.user_plan}): \\${current_cost_cap():.2f}. Used so far: \\${st.session_state.total_cost:.5f}. Remaining: \\${remaining_budget():.5f}.")
 
 tab1, tab2 = st.tabs(["Single brief", "Batch mode"])
 
@@ -346,7 +356,7 @@ with tab1:
 
     if st.button("Extract audience schema"):
         if remaining_budget() <= 0:
-            st.error(f"This session has reached its \\${SESSION_COST_CAP:.2f} usage cap. Please start a new session to continue.")
+            st.error(f"This session has reached its \\${current_cost_cap():.2f} usage cap. Please start a new session to continue.")
         else:
             is_valid, error_message = validate_brief_input(brief_input)
             if not is_valid:
@@ -430,7 +440,7 @@ with tab1:
             st.caption("Turns this schema into a short narrative persona for internal creative decks. A separate API call, generated on demand.")
             if st.button("Generate persona"):
                 if remaining_budget() <= 0:
-                    st.error(f"This session has reached its \\${SESSION_COST_CAP:.2f} usage cap. Please start a new session to continue.")
+                    st.error(f"This session has reached its \\${current_cost_cap():.2f} usage cap. Please start a new session to continue.")
                 else:
                     with st.spinner("Generating persona..."):
                         persona, persona_cost, persona_error = generate_persona(parsed)
@@ -458,6 +468,10 @@ with tab1:
         st.write(f"Total scans this session: {st.session_state.scan_count}")
         st.write(f"Total estimated cost this session: \\${st.session_state.total_cost:.5f}")
 
+# Roughly what an extra persona call costs on top of extraction, used only
+# to give the batch cost estimate a realistic number before the batch runs.
+ESTIMATED_PERSONA_COST = 0.01
+
 with tab2:
     st.write(f"Upload a CSV file with one column named `brief_text`, one ad brief per row. Maximum {MAX_BATCH_ROWS} rows per batch.")
     uploaded_file = st.file_uploader("Upload CSV", type="csv")
@@ -469,7 +483,16 @@ with tab2:
         elif len(df) > MAX_BATCH_ROWS:
             st.error(f"This file has {len(df)} rows, which exceeds the {MAX_BATCH_ROWS} row limit for this prototype. Please split it into smaller batches.")
         else:
-            estimated_batch_cost = len(df) * ESTIMATED_COST_PER_BRIEF
+            # Same Premium gate as the single-brief tab, applied to batch mode
+            # too, since the persona generator previously only existed there.
+            if st.session_state.user_plan == "Premium":
+                generate_batch_personas = st.checkbox("Also generate a persona for each row (Premium feature, adds a second API call per row)")
+            else:
+                generate_batch_personas = False
+                st.info("Generating a persona for each row is a Premium feature. Switch to Premium in the sidebar to enable it. (Simulated plan selector, not real billing.)")
+
+            per_brief_cost = ESTIMATED_COST_PER_BRIEF + (ESTIMATED_PERSONA_COST if generate_batch_personas else 0)
+            estimated_batch_cost = len(df) * per_brief_cost
             st.write(f"Found {len(df)} briefs in this file. Estimated cost: \\${estimated_batch_cost:.4f}. Remaining session budget: \\${remaining_budget():.4f}.")
 
             if estimated_batch_cost > remaining_budget():
@@ -496,6 +519,10 @@ with tab2:
                             "validation_flags": f"input rejected: {error_message}",
                             "assumptions": "",
                             "raw_response": "",
+                            "persona_name": "",
+                            "persona_tagline": "",
+                            "persona_quote": "",
+                            "persona_day_in_the_life": "",
                             "cost": 0.0
                         }
                         for field in DATA_DICTIONARY.keys():
@@ -514,6 +541,10 @@ with tab2:
                             "validation_flags": f"API error: {api_error}",
                             "assumptions": "",
                             "raw_response": "",
+                            "persona_name": "",
+                            "persona_tagline": "",
+                            "persona_quote": "",
+                            "persona_day_in_the_life": "",
                             "cost": 0.0
                         }
                         for field in DATA_DICTIONARY.keys():
@@ -529,6 +560,7 @@ with tab2:
                     try:
                         parsed = json.loads(clean_json_text(result_text))
                         flags = validate_against_dictionary(parsed)
+                        row_cost = cost
                         row_result = {
                             "row": i + 1,
                             "parsed_ok": True,
@@ -536,11 +568,34 @@ with tab2:
                             "validation_flags": "; ".join(flags) if flags else "none",
                             "assumptions": "; ".join(parsed.get("assumptions", [])),
                             "raw_response": "",
-                            "cost": round(cost, 5)
+                            "persona_name": "",
+                            "persona_tagline": "",
+                            "persona_quote": "",
+                            "persona_day_in_the_life": "",
                         }
                         for field in DATA_DICTIONARY.keys():
                             row_result[field] = parsed.get(field, "not specified")
                         log_event("batch_row", cost, True)
+
+                        # Persona generation runs per row, only when the checkbox
+                        # above was enabled (Premium plan). A failure here doesn't
+                        # fail the row's extraction, it just leaves the persona
+                        # fields blank, extraction is the primary result.
+                        if generate_batch_personas and remaining_budget() > 0:
+                            persona, persona_cost, persona_error = generate_persona(parsed)
+                            row_cost += persona_cost
+                            st.session_state.total_cost += persona_cost
+                            total_batch_cost += persona_cost
+                            if persona_error:
+                                log_event("persona_generation", persona_cost, False)
+                            else:
+                                log_event("persona_generation", persona_cost, True)
+                                row_result["persona_name"] = persona["NAME"]
+                                row_result["persona_tagline"] = persona["TAGLINE"]
+                                row_result["persona_quote"] = persona["QUOTE"]
+                                row_result["persona_day_in_the_life"] = persona["DAY_IN_THE_LIFE"]
+
+                        row_result["cost"] = round(row_cost, 5)
                     except json.JSONDecodeError:
                         row_result = {
                             "row": i + 1,
@@ -549,6 +604,10 @@ with tab2:
                             "validation_flags": "could not parse response" + (" (truncated)" if truncated else ""),
                             "assumptions": "",
                             "raw_response": result_text,
+                            "persona_name": "",
+                            "persona_tagline": "",
+                            "persona_quote": "",
+                            "persona_day_in_the_life": "",
                             "cost": round(cost, 5)
                         }
                         for field in DATA_DICTIONARY.keys():
@@ -580,6 +639,11 @@ with tab2:
                         st.write(r["validation_flags"])
                         st.markdown("**Assumptions:**")
                         st.write(r["assumptions"] if r["assumptions"] else "None")
+                        if r.get("persona_name"):
+                            st.markdown("**Audience persona (Premium):**")
+                            st.markdown(f"**{r['persona_name']}** — {r['persona_tagline']}")
+                            st.markdown(f"> {r['persona_quote']}")
+                            st.write(r["persona_day_in_the_life"])
                         if not r["parsed_ok"] and r["raw_response"]:
                             st.markdown("**Raw response (for debugging):**")
                             st.text(r["raw_response"])
