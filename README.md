@@ -42,6 +42,10 @@ The demographic and interest fields in this prototype are pulled directly from t
 
 First-party fields (purchase history segment, loyalty tier, email engagement) are illustrative placeholders, since no public standard exists for internal CRM segmentation, that data model is proprietary to each company.
 
+## A note on data
+
+This is a public prototype with no privacy policy or data handling agreement, see HANDOFF.md's Stage 5 section for what's missing. The live app displays a warning asking visitors not to paste real client or campaign information, use a fictional or sample brief instead.
+
 ## Known limitations
 
 1. **Truncated responses at low token limits.** Longer briefs occasionally produced incomplete JSON in earlier testing. The token limit was raised and the app now detects truncation explicitly via the API's stop_reason, flagging it rather than silently returning an incomplete result.

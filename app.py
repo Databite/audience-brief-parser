@@ -326,6 +326,7 @@ with st.expander("How does this actually work? (for the curious)"):
 **What it doesn't do:** It doesn't actually connect to any real customer database or purchase real audience data, it only produces the structured request you'd hand off to whoever manages those systems.
 """)
 
+st.warning("This is a public prototype with no privacy policy or data handling agreement in place. Please do not paste real client names, real campaign details, or any other confidential or sensitive information. Use a fictional or sample brief instead.")
 st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. This is a prototype, not a validated production tool, always sanity-check the output before using it for real targeting decisions.")
 st.caption(f"Session usage cap: \\${SESSION_COST_CAP:.2f}. Used so far: \\${st.session_state.total_cost:.5f}. Remaining: \\${remaining_budget():.5f}.")
 
