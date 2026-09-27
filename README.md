@@ -62,4 +62,4 @@ This is a public prototype with no privacy policy or data handling agreement, se
 - Pandas (display formatting)
 - gspread + Google Sheets API (operator-side usage logging)
 
-See HANDOFF.md for engineering handoff notes, open questions, and what this prototype deliberately doesn't solve. See PRICING.md for the pricing strategy and business model reasoning behind the Basic/Premium split.
+See HANDOFF.md for engineering handoff notes, open questions, and what this prototype deliberately doesn't solve. See PRICING.md for the pricing strategy and business model reasoning behind the Basic/Premium split. See GTM.md for the go-to-market channel reasoning.
