@@ -358,62 +358,87 @@ with tab1:
                     try:
                         parsed = json.loads(clean_json_text(result_text))
                         log_event("single_extraction", cost, True)
+                        # Persist the parsed result and its cost in session_state rather
+                        # than only a local variable. Streamlit reruns this entire script
+                        # top to bottom on every widget interaction, and st.button() only
+                        # returns True on the exact run where it was clicked. Without this,
+                        # clicking "Generate persona" below triggers a rerun in which
+                        # "Extract audience schema" is no longer True, so this whole block
+                        # (and the schema results) would silently stop rendering, which is
+                        # exactly the "clicked it, nothing happened" bug this fixes.
+                        st.session_state.last_parsed = parsed
+                        st.session_state.last_extraction_cost = cost
+                        # Clear any persona generated for a previous brief, otherwise a
+                        # new extraction would still show the old persona underneath it
+                        # since that's also read from session_state now.
+                        st.session_state.last_persona = None
                     except json.JSONDecodeError:
                         st.error("Claude did not return valid JSON. Raw response below.")
                         st.text(result_text)
-                        parsed = None
+                        st.session_state.last_parsed = None
                         log_event("single_extraction", cost, False)
 
-                    if parsed:
-                        st.subheader("Validation against data dictionary")
-                        flags = validate_against_dictionary(parsed)
-                        if flags:
-                            for flag in flags:
-                                st.error(flag)
-                        else:
-                            st.success("All returned values match the allowed data dictionary values.")
+    # Rendering reads from session_state, not a local variable, so results
+    # (and the persona button below) survive the rerun triggered by any
+    # other button on this page, including "Generate persona" itself.
+    parsed = st.session_state.get("last_parsed")
+    if parsed:
+        st.subheader("Validation against data dictionary")
+        flags = validate_against_dictionary(parsed)
+        if flags:
+            for flag in flags:
+                st.error(flag)
+        else:
+            st.success("All returned values match the allowed data dictionary values.")
 
-                        st.subheader("1st-party attributes (query your own CRM or customer data)")
-                        first_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "1st_party"]
-                        st.table(pd.DataFrame(first_party_rows, columns=["Attribute", "Value"]))
+        st.subheader("1st-party attributes (query your own CRM or customer data)")
+        first_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "1st_party"]
+        st.table(pd.DataFrame(first_party_rows, columns=["Attribute", "Value"]))
 
-                        st.subheader("3rd-party attributes (query external data providers)")
-                        third_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "3rd_party"]
-                        st.table(pd.DataFrame(third_party_rows, columns=["Attribute", "Value"]))
+        st.subheader("3rd-party attributes (query external data providers)")
+        third_party_rows = [(field, parsed.get(field, "not specified")) for field, info in DATA_DICTIONARY.items() if info["source"] == "3rd_party"]
+        st.table(pd.DataFrame(third_party_rows, columns=["Attribute", "Value"]))
 
-                        assumptions = parsed.get("assumptions", [])
-                        st.subheader("Assumptions made by the model")
-                        if assumptions:
-                            for a in assumptions:
-                                st.warning(a)
-                        else:
-                            st.write("No assumptions flagged.")
+        assumptions = parsed.get("assumptions", [])
+        st.subheader("Assumptions made by the model")
+        if assumptions:
+            for a in assumptions:
+                st.warning(a)
+        else:
+            st.write("No assumptions flagged.")
 
-                        st.divider()
-                        st.subheader("Audience persona (Premium feature)")
-                        st.caption("Turns this schema into a short narrative persona for internal creative decks. A separate API call, generated on demand.")
-                        if st.button("Generate persona"):
-                            if remaining_budget() <= 0:
-                                st.error(f"This session has reached its \\${SESSION_COST_CAP:.2f} usage cap. Please start a new session to continue.")
-                            else:
-                                with st.spinner("Generating persona..."):
-                                    persona, persona_cost, persona_error = generate_persona(parsed)
-                                st.session_state.total_cost += persona_cost
-                                if persona_error:
-                                    st.error(persona_error)
-                                    log_event("persona_generation", persona_cost, False)
-                                else:
-                                    log_event("persona_generation", persona_cost, True)
-                                    st.markdown(f"**{persona['NAME']}**")
-                                    st.write(persona['TAGLINE'])
-                                    st.markdown(f"> {persona['QUOTE']}")
-                                    st.write(persona['DAY_IN_THE_LIFE'])
-                                    st.caption(f"Persona generation cost: \\${persona_cost:.5f}")
+        st.divider()
+        st.subheader("Audience persona (Premium feature)")
+        st.caption("Turns this schema into a short narrative persona for internal creative decks. A separate API call, generated on demand.")
+        if st.button("Generate persona"):
+            if remaining_budget() <= 0:
+                st.error(f"This session has reached its \\${SESSION_COST_CAP:.2f} usage cap. Please start a new session to continue.")
+            else:
+                with st.spinner("Generating persona..."):
+                    persona, persona_cost, persona_error = generate_persona(parsed)
+                st.session_state.total_cost += persona_cost
+                if persona_error:
+                    st.error(persona_error)
+                    log_event("persona_generation", persona_cost, False)
+                else:
+                    log_event("persona_generation", persona_cost, True)
+                    # Also persisted, so the persona itself survives any later rerun
+                    # (for example, if you click "Generate persona" again).
+                    st.session_state.last_persona = persona
+                    st.session_state.last_persona_cost = persona_cost
 
-                    st.subheader("Cost tracking")
-                    st.write(f"This extraction cost approximately \\${cost:.5f}")
-                    st.write(f"Total scans this session: {st.session_state.scan_count}")
-                    st.write(f"Total estimated cost this session: \\${st.session_state.total_cost:.5f}")
+        if st.session_state.get("last_persona"):
+            persona = st.session_state.last_persona
+            st.markdown(f"**{persona['NAME']}**")
+            st.write(persona['TAGLINE'])
+            st.markdown(f"> {persona['QUOTE']}")
+            st.write(persona['DAY_IN_THE_LIFE'])
+            st.caption(f"Persona generation cost: \\${st.session_state.last_persona_cost:.5f}")
+
+        st.subheader("Cost tracking")
+        st.write(f"This extraction cost approximately \\${st.session_state.last_extraction_cost:.5f}")
+        st.write(f"Total scans this session: {st.session_state.scan_count}")
+        st.write(f"Total estimated cost this session: \\${st.session_state.total_cost:.5f}")
 
 with tab2:
     st.write(f"Upload a CSV file with one column named `brief_text`, one ad brief per row. Maximum {MAX_BATCH_ROWS} rows per batch.")
