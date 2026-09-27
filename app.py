@@ -329,6 +329,15 @@ with st.expander("How does this actually work? (for the curious)"):
 st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. This is a prototype, not a validated production tool, always sanity-check the output before using it for real targeting decisions.")
 st.caption(f"Session usage cap: \\${SESSION_COST_CAP:.2f}. Used so far: \\${st.session_state.total_cost:.5f}. Remaining: \\${remaining_budget():.5f}.")
 
+# Simulates the pricing tier gate for demo purposes. There's no real user
+# account or billing system here, so this isn't real access control, it's a
+# stand-in that lets you toggle between what a Basic vs Premium visitor
+# would see. The `key` argument makes Streamlit persist this choice in
+# st.session_state automatically for the rest of the browser session, the
+# same lifetime as the cost cap and scan count above.
+st.sidebar.selectbox("Plan (simulated, for demo purposes)", ["Basic", "Premium"], key="user_plan")
+st.sidebar.caption("This selector simulates what a Basic vs Premium subscriber would see. It is not connected to real billing or user accounts.")
+
 tab1, tab2 = st.tabs(["Single brief", "Batch mode"])
 
 with tab1:
@@ -409,31 +418,39 @@ with tab1:
 
         st.divider()
         st.subheader("Audience persona (Premium feature)")
-        st.caption("Turns this schema into a short narrative persona for internal creative decks. A separate API call, generated on demand.")
-        if st.button("Generate persona"):
-            if remaining_budget() <= 0:
-                st.error(f"This session has reached its \\${SESSION_COST_CAP:.2f} usage cap. Please start a new session to continue.")
-            else:
-                with st.spinner("Generating persona..."):
-                    persona, persona_cost, persona_error = generate_persona(parsed)
-                st.session_state.total_cost += persona_cost
-                if persona_error:
-                    st.error(persona_error)
-                    log_event("persona_generation", persona_cost, False)
-                else:
-                    log_event("persona_generation", persona_cost, True)
-                    # Also persisted, so the persona itself survives any later rerun
-                    # (for example, if you click "Generate persona" again).
-                    st.session_state.last_persona = persona
-                    st.session_state.last_persona_cost = persona_cost
 
-        if st.session_state.get("last_persona"):
-            persona = st.session_state.last_persona
-            st.markdown(f"**{persona['NAME']}**")
-            st.write(persona['TAGLINE'])
-            st.markdown(f"> {persona['QUOTE']}")
-            st.write(persona['DAY_IN_THE_LIFE'])
-            st.caption(f"Persona generation cost: \\${st.session_state.last_persona_cost:.5f}")
+        if st.session_state.user_plan != "Premium":
+            # Locked state for Basic: show what the feature is and why it's
+            # gated, rather than just hiding the section entirely. A visible
+            # locked feature does more to sell an upgrade than a feature
+            # that doesn't appear to exist at all.
+            st.info("Persona generation is a Premium feature. Switch to Premium in the sidebar to try it. (This is a simulated plan selector for demo purposes, not real billing.)")
+        else:
+            st.caption("Turns this schema into a short narrative persona for internal creative decks. A separate API call, generated on demand.")
+            if st.button("Generate persona"):
+                if remaining_budget() <= 0:
+                    st.error(f"This session has reached its \\${SESSION_COST_CAP:.2f} usage cap. Please start a new session to continue.")
+                else:
+                    with st.spinner("Generating persona..."):
+                        persona, persona_cost, persona_error = generate_persona(parsed)
+                    st.session_state.total_cost += persona_cost
+                    if persona_error:
+                        st.error(persona_error)
+                        log_event("persona_generation", persona_cost, False)
+                    else:
+                        log_event("persona_generation", persona_cost, True)
+                        # Also persisted, so the persona itself survives any later rerun
+                        # (for example, if you click "Generate persona" again).
+                        st.session_state.last_persona = persona
+                        st.session_state.last_persona_cost = persona_cost
+
+            if st.session_state.get("last_persona"):
+                persona = st.session_state.last_persona
+                st.markdown(f"**{persona['NAME']}**")
+                st.write(persona['TAGLINE'])
+                st.markdown(f"> {persona['QUOTE']}")
+                st.write(persona['DAY_IN_THE_LIFE'])
+                st.caption(f"Persona generation cost: \\${st.session_state.last_persona_cost:.5f}")
 
         st.subheader("Cost tracking")
         st.write(f"This extraction cost approximately \\${st.session_state.last_extraction_cost:.5f}")
