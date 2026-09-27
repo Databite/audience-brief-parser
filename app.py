@@ -237,6 +237,65 @@ def llm_extract(brief_text):
     prompt = build_prompt(brief_text)
     return call_claude(prompt, 1500)
 
+def build_persona_prompt(parsed_schema):
+    """Build a prompt that turns an already-extracted audience schema into a
+    short narrative persona, the kind of one-pager a boutique agency would
+    put in front of a client alongside a creative brief.
+
+    Takes the structured schema rather than the original brief text, since
+    the persona should reflect what the tool actually extracted and
+    validated, not re-derive its own interpretation of the raw brief.
+    """
+    schema_lines = "\n".join([f"- {field}: {value}" for field, value in parsed_schema.items() if field != "assumptions"])
+    return f"""You are a marketing strategist writing a short audience persona for an internal creative deck, based on a validated target audience schema.
+
+Audience schema:
+{schema_lines}
+
+Write a persona with exactly this structure:
+NAME: [a plausible first name and last initial for this persona]
+TAGLINE: [one short sentence capturing who they are]
+QUOTE: [one first-person sentence in this persona's voice, something they might plausibly say]
+DAY_IN_THE_LIFE: [one short paragraph, 3-4 sentences, describing a typical day or moment relevant to this audience]
+
+Ground every detail in the schema values above. Do not invent demographic or interest details that contradict or go beyond what's given. This is a fictional, illustrative persona for internal creative use, not a real individual or a claim about any real person.
+"""
+
+def parse_persona_result(text):
+    """Parse the persona generator's structured text response into a dict.
+
+    Same string-matching approach as the rest of this app's LLM output
+    parsing: expects one field per line in the exact NAME/TAGLINE/QUOTE/
+    DAY_IN_THE_LIFE format the prompt requests.
+    """
+    fields = {"NAME": "", "TAGLINE": "", "QUOTE": "", "DAY_IN_THE_LIFE": ""}
+    current_field = None
+    for line in text.splitlines():
+        matched = False
+        for field in fields:
+            if line.startswith(field + ":"):
+                fields[field] = line.split(":", 1)[1].strip()
+                current_field = field
+                matched = True
+                break
+        if not matched and current_field and line.strip():
+            fields[current_field] += " " + line.strip()
+    return fields
+
+def generate_persona(parsed_schema):
+    """Generate a narrative persona from an already-extracted schema.
+
+    This is the Premium-tier feature: it's a second, separate API call on
+    top of the base extraction, so it's kept as an explicit opt-in button
+    rather than running automatically, so a Basic-equivalent user in this
+    prototype isn't charged for a call they didn't ask for.
+    """
+    prompt = build_persona_prompt(parsed_schema)
+    result_text, cost, truncated, api_error = call_claude(prompt, 400)
+    if api_error:
+        return None, cost, api_error
+    return parse_persona_result(result_text), cost, None
+
 def validate_against_dictionary(parsed_json):
     flags = []
     for field, info in DATA_DICTIONARY.items():
@@ -329,6 +388,27 @@ with tab1:
                                 st.warning(a)
                         else:
                             st.write("No assumptions flagged.")
+
+                        st.divider()
+                        st.subheader("Audience persona (Premium feature)")
+                        st.caption("Turns this schema into a short narrative persona for internal creative decks. A separate API call, generated on demand.")
+                        if st.button("Generate persona"):
+                            if remaining_budget() <= 0:
+                                st.error(f"This session has reached its \\${SESSION_COST_CAP:.2f} usage cap. Please start a new session to continue.")
+                            else:
+                                with st.spinner("Generating persona..."):
+                                    persona, persona_cost, persona_error = generate_persona(parsed)
+                                st.session_state.total_cost += persona_cost
+                                if persona_error:
+                                    st.error(persona_error)
+                                    log_event("persona_generation", persona_cost, False)
+                                else:
+                                    log_event("persona_generation", persona_cost, True)
+                                    st.markdown(f"**{persona['NAME']}**")
+                                    st.write(persona['TAGLINE'])
+                                    st.markdown(f"> {persona['QUOTE']}")
+                                    st.write(persona['DAY_IN_THE_LIFE'])
+                                    st.caption(f"Persona generation cost: \\${persona_cost:.5f}")
 
                     st.subheader("Cost tracking")
                     st.write(f"This extraction cost approximately \\${cost:.5f}")
