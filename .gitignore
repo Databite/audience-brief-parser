@@ -4,3 +4,4 @@ __pycache__/
 .env
 .streamlit/secrets.toml
 audience-parser-logging-eb22d4a5e70c.json
+.DS_Store
