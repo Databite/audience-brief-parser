@@ -71,6 +71,9 @@ MODEL = "claude-sonnet-5"
 INPUT_COST_PER_1K = 0.003
 OUTPUT_COST_PER_1K = 0.015
 
+# Bounds are business decisions, not derived from anything technical.
+# Kept low because this app is reachable by anonymous visitors with no
+# per-user auth, so a single session's worst-case API spend needs a ceiling.
 MIN_BRIEF_LENGTH = 15
 MAX_BRIEF_LENGTH = 3000
 MAX_BATCH_ROWS = 50
@@ -82,6 +85,13 @@ SHEET_ID = "1QcuH2mH2HHtvC5PtCDRwqp7yK-u09WT6qZh91pKk4og"
 SHEET_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 def get_sheet_client():
+    """Authorize a Google Sheets client for operator-side usage logging.
+
+    Tries Streamlit's secrets store first (how this runs when deployed on
+    Streamlit Community Cloud), then falls back to a local service account
+    JSON file (how this runs on a developer's machine, where st.secrets
+    isn't configured).
+    """
     try:
         creds_dict = dict(st.secrets["gcp_service_account"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=SHEET_SCOPES)
@@ -185,6 +195,13 @@ Ad brief:
     return prompt
 
 def clean_json_text(text):
+    """Strip a markdown code fence from Claude's response, if present.
+
+    The prompt explicitly asks for raw JSON with no code fences, but models
+    sometimes wrap output in ```json ... ``` anyway. This normalizes both
+    cases so json.loads() doesn't fail on well-formed JSON that's just
+    wrapped in markdown.
+    """
     text = text.strip()
     if text.startswith("```"):
         text = text.strip("`")
