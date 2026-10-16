@@ -747,9 +747,9 @@ with tab3:
                     st.session_state.total_cost += cost
                     st.session_state.last_report_cost = cost
                     if truncated:
-                        st.warning("Response was cut off before completion. The report below may be incomplete.")
+                        st.warning("Claude's response was cut off before it finished. The sections that arrived are shown below; anything missing is flagged. Try again, or shorten the input, for a complete report.")
                     try:
-                        st.session_state.last_report = strategy_report.parse_report(result_text)
+                        st.session_state.last_report = strategy_report.parse_report(result_text, truncated=truncated)
                         st.session_state.last_report_source_type = report_source_type
                         log_event("strategy_report", cost, True)
                     except (json.JSONDecodeError, ValueError):

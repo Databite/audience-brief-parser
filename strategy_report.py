@@ -30,8 +30,11 @@ SOURCE_TYPES = {
 }
 MIN_SOURCE_LENGTH = 50
 MAX_SOURCE_LENGTH = 40000
-REPORT_MAX_TOKENS = 6000
-ESTIMATED_COST_PER_REPORT = 0.15
+# A full six-section report runs ~5-8K output tokens; 6K cut real reports off
+# mid-JSON, so leave generous headroom. The estimate covers the worst case
+# (16K output tokens at $0.015/1K) so the session cap check stays honest.
+REPORT_MAX_TOKENS = 16000
+ESTIMATED_COST_PER_REPORT = 0.25
 
 AUDIENCE_CARDS = [
     ("core_profile", "Core profile"),
@@ -82,6 +85,8 @@ Sections to produce:
 5. hashtags: for the single most important content platform. "platform" (its name), "guidance" (1-2 sentences on how many tags per post and how to mix them, at most {MAX_TAGS_PER_POST} per post), "groups" (3-4 groups, each with "label" such as "High-volume", "purpose" such as "Broad reach", and "tags": 4-6 hashtags) and "combos" (3-4 suggested combinations, each with "post_type" naming a concrete post idea and "tags": 3-{MAX_TAGS_PER_POST} hashtags drawn from the groups). Include location-specific tags if the business is local or national. Every hashtag starts with "#" and has no spaces.
 6. actions_30_day: 3-5 steps for the next 30 days, in order. Each has "timeframe" (e.g. "Week 1", "Week 1-2", "Week 3-4"), "title" (a few words) and "detail" (1-2 sentences, concrete enough to do without another meeting, e.g. the exact first post title).
 7. validation_questions: exactly 3 questions whose answers would most change this strategy. Each has "question" and "why_it_matters" (one sentence on what each possible answer would mean for the plan).
+
+Keep it tight: every "body", "detail" and "why_it_matters" is at most 2-3 sentences, so the whole report fits on about four printed pages.
 
 Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
 {{
@@ -169,15 +174,56 @@ def validate_report(report):
     return issues
 
 
-def parse_report(result_text):
+def repair_truncated_json(text):
+    """Best-effort recovery of a JSON object cut off mid-stream (the model hit
+    max_tokens). Drops the trailing incomplete value and closes any open
+    brackets, so the sections written before the cut-off still render.
+    Returns the parsed object, or None if nothing usable can be recovered."""
+    stack = []
+    in_string = escaped = False
+    cut_points = []  # (index of a comma outside strings, closers needed there)
+    for i, ch in enumerate(text):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]":
+            if stack:
+                stack.pop()
+        elif ch == ",":
+            cut_points.append((i, "".join(reversed(stack))))
+    for index, closers in reversed(cut_points[-500:]):
+        try:
+            return json.loads(text[:index] + closers)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def parse_report(result_text, truncated=False):
     """Parse the model's JSON response into a normalized report dict.
+    When the response was cut off (truncated=True), salvages the sections that
+    did arrive; validate_report() then names whatever is missing.
     Raises json.JSONDecodeError or ValueError on unusable output."""
     text = result_text.strip()
     if text.startswith("```"):
         text = text.strip("`")
         if text.startswith("json"):
             text = text[4:]
-    report = json.loads(text)
+    try:
+        report = json.loads(text)
+    except json.JSONDecodeError:
+        report = repair_truncated_json(text) if truncated else None
+        if report is None:
+            raise
     if not isinstance(report, dict):
         raise ValueError("Report is not a JSON object.")
     return normalize_report(report)

@@ -24,6 +24,25 @@ def test_parse_normalizes_loose_fields():
     assert strategy_report.validate_report(report) == []
 
 
+def test_truncated_response_is_salvaged():
+    # Cut the fixture off mid-string inside actions_30_day, like a max_tokens stop.
+    cut = FIXTURE[: FIXTURE.index("Publish your second content series") + 10]
+    report = strategy_report.parse_report(cut, truncated=True)
+    assert report["business_name"] == "Rush Me Financial"
+    assert len(report["insights"]) == 4
+    # The step being written when the cut happened keeps its complete fields.
+    assert len(report["actions_30_day"]) == 4
+    assert "detail" not in report["actions_30_day"][3]
+    assert report["validation_questions"] == []
+    assert "No validation questions." in strategy_report.validate_report(report)
+
+
+def test_untruncated_garbage_still_raises():
+    import pytest
+    with pytest.raises(json.JSONDecodeError):
+        strategy_report.parse_report('{"business_name": "x", ', truncated=False)
+
+
 def test_validate_flags_missing_sections():
     report = strategy_report.normalize_report({"insights": [{"title": "x"}]})
     issues = strategy_report.validate_report(report)
