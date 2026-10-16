@@ -5,7 +5,9 @@ import json
 import pandas as pd
 import io
 import datetime
+import re
 import gspread
+import strategy_report
 from google.oauth2.service_account import Credentials
 
 st.set_page_config(
@@ -119,7 +121,7 @@ def log_event(event_type, cost, success):
 
 DATA_DICTIONARY = {
     "age_range": {
-        "allowed": ["18-20", "21-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75+"],
+        "allowed": ["13-17", "18-20", "21-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75+"],
         "source": "3rd_party"
     },
     "gender": {
@@ -139,7 +141,15 @@ DATA_DICTIONARY = {
         "source": "3rd_party"
     },
     "social_platforms": {
-        "allowed": ["Instagram", "TikTok", "Facebook", "LinkedIn", "YouTube", "Twitter/X"],
+        "allowed": ["Instagram", "TikTok", "Facebook", "LinkedIn", "YouTube", "Twitter/X", "WhatsApp", "Snapchat"],
+        "source": "3rd_party"
+    },
+    "country": {
+        "allowed": ["Canada", "United States", "United Kingdom", "Australia", "India", "Other"],
+        "source": "3rd_party"
+    },
+    "employment_type": {
+        "allowed": ["Employed professional", "Small business owner (incorporated)", "Small business owner (unincorporated)", "Self-employed", "Student", "Retired"],
         "source": "3rd_party"
     },
     "purchase_history_segment": {
@@ -155,6 +165,11 @@ DATA_DICTIONARY = {
         "source": "1st_party"
     },
 }
+
+# Fields the prompt allows to hold several comma-joined values. Only these are
+# split on commas during validation: some single-value fields have commas
+# inside an allowed value (e.g. "$150,000-$174,999").
+MULTI_VALUE_FIELDS = {"age_range", "interests", "social_platforms", "employment_type"}
 
 def validate_brief_input(text):
     stripped = text.strip()
@@ -180,7 +195,7 @@ Rules:
 2. If you infer a value from indirect language, for example inferring household_income from a phrase like "disposable income", still provide the value, but also list that inference in the assumptions list below. Keep each assumption to one short sentence.
 3. If the brief mentions something relevant that has no matching allowed value in the schema, note it explicitly in the assumptions list rather than dropping it silently.
 4. For 1st-party fields (purchase_history_segment, loyalty_tier, email_engagement): infer the most likely value from what the business describes about their existing customer relationship. For example, if the business mentions referrals and repeat clients, infer purchase_history_segment as "repeat_customer". If the brief describes a brand-new product launch with no existing customers, infer "first_time_buyer". Use "not specified" only if there is genuinely no signal in the brief.
-5. For multi-value fields like interests and social_platforms, return a comma-separated string of all applicable allowed values (e.g. "LinkedIn, Instagram, YouTube").
+5. For multi-value fields like age_range, interests, social_platforms and employment_type, return a comma-separated string of all applicable allowed values (e.g. "LinkedIn, Instagram, YouTube").
 6. In the "insights" field, provide 3–5 strategic recommendations that go BEYOND the taxonomy fields. These should be specific, actionable observations — such as which channel to prioritize and why, which audience segment is underserved, what messaging angle fits this audience best, or what the brief implies but doesn't state. Write these as a senior marketing strategist would: direct, specific, and worth acting on. Do not restate the schema values.
 7. In the "validation_questions" field, list 2–3 questions the business should answer to validate or refine these audience assumptions. Frame them as next-step questions, not disclaimers.
 8. Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
@@ -191,6 +206,8 @@ Rules:
   "urbanization": "...",
   "interests": "...",
   "social_platforms": "...",
+  "country": "...",
+  "employment_type": "...",
   "purchase_history_segment": "...",
   "loyalty_tier": "...",
   "email_engagement": "...",
@@ -314,9 +331,12 @@ def validate_against_dictionary(parsed_json):
         value = parsed_json.get(field, "not specified")
         if value == "not specified":
             continue
-        # Multi-value fields (interests, social_platforms) come back as
-        # comma-joined strings. Validate each item individually.
-        items = [v.strip() for v in value.split(",")] if isinstance(value, str) else [value]
+        # Multi-value fields come back as comma-joined strings. Validate each
+        # item individually.
+        if field in MULTI_VALUE_FIELDS and isinstance(value, str):
+            items = [v.strip() for v in value.split(",")]
+        else:
+            items = [value]
         for item in items:
             if item not in info["allowed"]:
                 flags.append(f"'{field}' contains '{item}', which is not in the allowed list {info['allowed']}")
@@ -363,7 +383,7 @@ st.warning("This is a public prototype with no privacy policy or data handling a
 st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. This is a prototype, not a validated production tool, always sanity-check the output before using it for real targeting decisions.")
 st.caption(f"Session usage cap ({st.session_state.user_plan}): \\${current_cost_cap():.2f}. Used so far: \\${st.session_state.total_cost:.5f}. Remaining: \\${remaining_budget():.5f}.")
 
-tab1, tab2 = st.tabs(["Single brief", "Batch mode"])
+tab1, tab2, tab3 = st.tabs(["Single brief", "Batch mode", "Strategy report"])
 
 with tab1:
     brief_input = st.text_area("Ad brief", height=150)
@@ -698,3 +718,107 @@ with tab2:
                     "batch_results.csv",
                     "text/csv"
                 )
+
+with tab3:
+    st.write("Turn a discovery call transcript (or detailed notes) into a client-ready Audience & Channel Strategy: target audience, four strategic insights, a channel plan, hashtags, 30-day actions and open questions.")
+    st.caption(f"Paste between {strategy_report.MIN_SOURCE_LENGTH:,} and {strategy_report.MAX_SOURCE_LENGTH:,} characters, or upload a .txt transcript. One report costs roughly \\${strategy_report.ESTIMATED_COST_PER_REPORT:.2f}.")
+    report_business = st.text_input("Business name (optional)", key="report_business")
+    report_file = st.file_uploader("Upload transcript (.txt)", type=["txt"], key="report_file")
+    report_text = st.text_area("Or paste the transcript / notes", height=200, key="report_text")
+
+    if st.button("Build strategy report"):
+        source = report_file.getvalue().decode("utf-8", errors="replace") if report_file is not None else report_text
+        if remaining_budget() < strategy_report.ESTIMATED_COST_PER_REPORT:
+            st.error(f"A strategy report needs about \\${strategy_report.ESTIMATED_COST_PER_REPORT:.2f} and this session has \\${remaining_budget():.4f} left. Please start a new session to continue.")
+        else:
+            is_valid, error_message = strategy_report.validate_source_input(source)
+            if not is_valid:
+                st.warning(error_message)
+            else:
+                with st.spinner("Building the strategy report with Claude..."):
+                    prompt = strategy_report.build_report_prompt(source, report_business)
+                    result_text, cost, truncated, api_error = call_claude(prompt, strategy_report.REPORT_MAX_TOKENS)
+                if api_error:
+                    st.error(api_error)
+                    log_event("strategy_report", 0.0, False)
+                else:
+                    st.session_state.total_cost += cost
+                    st.session_state.last_report_cost = cost
+                    if truncated:
+                        st.warning("Response was cut off before completion. The report below may be incomplete.")
+                    try:
+                        st.session_state.last_report = strategy_report.parse_report(result_text)
+                        log_event("strategy_report", cost, True)
+                    except (json.JSONDecodeError, ValueError):
+                        st.session_state.last_report = None
+                        st.error("Claude did not return a valid report. Raw response below.")
+                        st.text(result_text)
+                        log_event("strategy_report", cost, False)
+
+    # Rendered from session_state so the report survives reruns, for example
+    # the one triggered by clicking a download button.
+    report = st.session_state.get("last_report")
+    if report:
+        for issue in strategy_report.validate_report(report):
+            st.warning(issue)
+
+        title = "Audience & Channel Strategy" + (f": {report['business_name']}" if report["business_name"] else "")
+        st.header(title)
+
+        st.subheader("01 Target audience")
+        card_cols = st.columns(3)
+        for i, (key, label) in enumerate(strategy_report.AUDIENCE_CARDS):
+            card = report["audience"][key]
+            with card_cols[i % 3]:
+                with st.container(border=True):
+                    st.caption(label.upper())
+                    st.markdown(f"**{card['title']}**")
+                    st.write(card["body"])
+        if report["audience_tags"]:
+            st.markdown(" ".join(f"`{t}`" for t in report["audience_tags"]))
+
+        st.subheader("02 Strategic insights")
+        for i, insight in enumerate(report["insights"], 1):
+            st.markdown(f"**{i}. {insight.get('title', '')}**")
+            st.write(f"{insight.get('body', '')} **{insight.get('action', '')}**")
+
+        st.subheader("03 Channel plan")
+        st.table(pd.DataFrame(
+            [(r.get("channel", ""), r["priority"].upper(), r.get("what_to_do", ""), r.get("budget", ""), r.get("expected_outcome", "")) for r in report["channel_plan"]],
+            columns=["Channel", "Priority", "What to do", "Budget", "Expected outcome"]
+        ))
+
+        hashtags = report["hashtags"]
+        st.subheader(f"04 {hashtags['platform']} hashtags".replace("  ", " "))
+        st.write(hashtags["guidance"])
+        for group in hashtags["groups"]:
+            st.markdown(f"**{group.get('label', '')}** ({group.get('purpose', '')}): " + " ".join(f"`{t}`" for t in group["tags"]))
+        if hashtags["combos"]:
+            st.markdown("**Suggested combo per post type**")
+            for combo in hashtags["combos"]:
+                st.markdown(f"- {combo.get('post_type', '')}: {' '.join(combo['tags'])}")
+
+        st.subheader("05 Next 30 days")
+        for step in report["actions_30_day"]:
+            st.markdown(f"→ **{step.get('timeframe', '')}: {step.get('title', '')}**  \n{step.get('detail', '')}")
+
+        st.subheader("06 To sharpen this further")
+        for i, q in enumerate(report["validation_questions"], 1):
+            st.markdown(f"{i}. **{q.get('question', '')}**  \n{q.get('why_it_matters', '')}")
+
+        st.divider()
+        month_label = datetime.date.today().strftime("%B %Y")
+        file_stem = re.sub(r"[^A-Za-z0-9]+", "-", report["business_name"]).strip("-").lower() or "client"
+        st.download_button(
+            "Download client report (HTML, print to PDF)",
+            strategy_report.report_to_html(report, month_label=month_label),
+            f"{file_stem}-audience-channel-strategy.html",
+            "text/html"
+        )
+        st.download_button(
+            "Download as Markdown",
+            strategy_report.report_to_markdown(report),
+            f"{file_stem}-audience-channel-strategy.md",
+            "text/markdown"
+        )
+        st.caption(f"This report cost approximately \\${st.session_state.get('last_report_cost', 0.0):.5f}")

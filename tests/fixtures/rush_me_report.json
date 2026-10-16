@@ -1,0 +1,52 @@
+{
+  "business_name": "Rush Me Financial",
+  "audience": {
+    "core_profile": {"title": "Established Canadian Professional", "body": "35-55, homeowner, household income $100K+. In the accumulation phase: building wealth, not yet drawing it down. Has savings but hasn't fully optimized them."},
+    "sharpest_segment": {"title": "Incorporated Small Business Owner", "body": "Earns through a corp, pays themselves salary + dividends, has business expenses to track. Most advisors solve one of their three problems. You solve all three."},
+    "why_they_hire": {"title": "Grow & protect family wealth", "body": "They're busy running a business or career and don't want to think about money. They want one trusted person who proactively stays on top of it for them."},
+    "what_makes_them_switch": {"title": "Feeling like a number", "body": "Generic advice, no proactive outreach, not being called before tax season. Your birthday portfolio snapshot is the antidote: it signals you're paying attention."},
+    "how_they_find_you": {"title": "Referral, then LinkedIn", "body": "Almost never a cold ad. They ask a peer they trust, or they've been reading your content for months and finally reach out when the moment is right."},
+    "where_they_live_online": {"title": "LinkedIn + WhatsApp", "body": "LinkedIn for professional identity and learning. WhatsApp for community and warm conversation. Instagram is leisure, not where financial decisions get made."}
+  },
+  "audience_tags": ["Homeowners", "Business owners (incorporated)", "Dual-income households", "New immigrants building wealth", "Referral-driven", "Long-term planners", "Accumulation phase", "Corp + personal tax complexity"],
+  "insights": [
+    {"title": "Incorporated business owners are your sharpest differentiator", "body": "This segment has three linked problems (corporate tax optimization, personal investments, and expense tracking) that most advisors address separately. Your suite solves all three, which is a rare offer.", "action": "Lead with the incorporated angle in your content and pitch; it filters out the wrong prospects and attracts exactly the client who stays longest."},
+    {"title": "LinkedIn, not Instagram, and most advisors in your space are doing it wrong", "body": "Most Canadian financial advisors on LinkedIn post the same compliance-safe content that says nothing. Almost none are publishing content specifically for incorporated small business owners. That gap is your opening.", "action": "Post on LinkedIn 2-3x per week on topics your target client actually searches: \"how to pay yourself from a corporation\", \"FHSA vs RRSP for business owners\", \"receipt tracking for the self-employed\"."},
+    {"title": "Your birthday portfolio snapshot is already a referral trigger: systematize it", "body": "You already send clients a personalized portfolio snapshot on their birthday. That moment of delight is the highest-intent referral window you have.", "action": "Add one line: \"If you have a friend who'd love this kind of proactive planning, I have two spots open this quarter.\""},
+    {"title": "Your WhatsApp group is high-intent: design for DMs, not consumption", "body": "Members who join a financial WhatsApp group are already warm. The goal isn't to educate; it's to make people raise their hand.", "action": "End every broadcast with a low-friction prompt: \"Reply if this applies to you\" or \"DM me, I'll walk you through the numbers.\""}
+  ],
+  "channel_plan": [
+    {"channel": "LinkedIn", "priority": "primary", "what_to_do": "2-3 posts/week: tax tips for incorporated owners, FHSA/RRSP myth-busting, anonymized case studies", "budget": "Organic, no ad budget needed", "expected_outcome": "Inbound DMs from professionals; establishes expert positioning"},
+    {"channel": "WhatsApp Group", "priority": "primary", "what_to_do": "1-2 broadcasts/week ending with a specific CTA. Follow up every reply within 24 hrs", "budget": "Zero cost", "expected_outcome": "2-4 qualified DMs per month from warm audience"},
+    {"channel": "Referral Engine", "priority": "Primary", "what_to_do": "Add one referral ask to birthday portfolio snapshot. Track referrals in a simple sheet", "budget": "Zero cost", "expected_outcome": "1-2 referred intros per quarter per active referrer"},
+    {"channel": "Instagram", "priority": "secondary", "what_to_do": "Repurpose LinkedIn content as Reels or carousels. Lighter cadence (1x/week)", "budget": "No separate budget", "expected_outcome": "Brand awareness with younger segment; secondary priority"},
+    {"channel": "Paid Ads (Google/Meta)", "priority": "later", "what_to_do": "Only once organic content is converting. Test a $300/mo budget on LinkedIn Lead Gen forms targeting incorporated professionals", "budget": "$300-500/mo to test", "expected_outcome": "Predictable lead flow once message is proven organically"}
+  ],
+  "hashtags": {
+    "platform": "LinkedIn",
+    "guidance": "Use 3-5 per post. Mix one high-volume tag (broad reach) with two niche tags (right audience). Avoid stuffing: LinkedIn's algorithm deprioritizes posts with more than 5 tags.",
+    "groups": [
+      {"label": "High-volume", "purpose": "Broad reach", "tags": ["#PersonalFinance", "#FinancialPlanning", "#WealthManagement", "#Investing", "#TaxPlanning"]},
+      {"label": "Niche", "purpose": "Incorporated owners & professionals", "tags": ["#SmallBusinessOwner", "#IncorporatedBusiness", "#CanadianEntrepreneur", "#CorpTax", "#HoldingCompany", "#BusinessOwnerLife"]},
+      {"label": "Canada-specific", "purpose": "Local credibility", "tags": ["#CanadianFinance", "#RRSP", "#TFSA", "#FHSA", "#CRA", "#CanadianInvestor"]},
+      {"label": "Community", "purpose": "New Canadians building wealth", "tags": ["NewToCanada", "#ImmigrantEntrepreneur", "#Building Wealth", "#DiasporaFinance"]}
+    ],
+    "combos": [
+      {"post_type": "Tax tip for incorporated owners", "tags": ["#TaxPlanning", "#IncorporatedBusiness", "#CanadianFinance", "#SmallBusinessOwner"]},
+      {"post_type": "RRSP vs FHSA myth-busting", "tags": ["#RRSP", "#FHSA", "#PersonalFinance", "#CanadianInvestor", "#FinancialPlanning"]},
+      {"post_type": "Wealth-building for new Canadians", "tags": ["#NewToCanada", "#ImmigrantEntrepreneur", "#CanadianFinance", "#BuildingWealth"]},
+      {"post_type": "General financial planning post", "tags": ["#WealthManagement", "#FinancialPlanning", "#Investing", "#CanadianFinance"]}
+    ]
+  },
+  "actions_30_day": [
+    {"timeframe": "Week 1", "title": "LinkedIn audit + first post", "detail": "Update your LinkedIn headline to call out incorporated small business owners specifically. Publish your first post: \"3 tax mistakes incorporated owners make with their investments\"."},
+    {"timeframe": "Week 1-2", "title": "Systematize the birthday referral ask", "detail": "Add one referral line to your existing birthday snapshot template. Build a simple tracker (a Google Sheet works): Name, Date sent, Referral asked Y/N, Referral received."},
+    {"timeframe": "Week 2", "title": "WhatsApp broadcast redesign", "detail": "Rewrite your next three WhatsApp messages to end with a specific prompt instead of pure information. Note which ones get replies; repeat the format that works."},
+    {"timeframe": "Week 3-4", "title": "Publish your second content series", "detail": "Based on what got engagement in weeks 1-2, double down on the angle that landed."}
+  ],
+  "validation_questions": [
+    {"question": "What share of your current best clients are incorporated business owners, and is that a segment you're actively targeting, or one that found you organically?", "why_it_matters": "Knowing this tells you whether to lead with the incorporated angle in all channels, or treat it as a niche play alongside the broader professional audience."},
+    {"question": "How many people are in the WhatsApp group, and what does engagement look like today: reads, replies, or mostly silence?", "why_it_matters": "If it's mostly silent, fixing engagement there is higher-ROI than adding any new channel."},
+    {"question": "What's your current referral-to-client conversion rate: when a client gives you a name, how often does it close?", "why_it_matters": "If referral conversion is already high, systematizing the ask is your single best growth lever. If it's low, there may be a trust-gap or follow-up process to fix first."}
+  ]
+}

@@ -20,6 +20,10 @@ An ad brief typically describes a target audience in plain human language, for e
 
 Upload a CSV with a brief_text column (up to 50 rows) to process multiple briefs at once. Before running, the tool estimates the batch's likely cost against your remaining session budget and refuses to start if it would exceed it, rather than running out of budget partway through. Results show a compact summary table plus an expandable detail view per row, with a downloadable CSV of the full output.
 
+## Strategy report
+
+The "Strategy report" tab turns a discovery call transcript (up to 40,000 characters, pasted or uploaded as .txt) into a client-ready Audience & Channel Strategy with six sections: target audience cards, four strategic insights, a channel plan with priorities and budgets, platform hashtags with suggested combos, 30-day actions, and open validation questions. The report can be downloaded as a print-ready HTML page (print to PDF for the client) or as Markdown. Prompt, validation and rendering live in `strategy_report.py`; run `python -m pytest tests/` to check them.
+
 ## Audience persona generator (Premium feature)
 
 After extracting a schema, an optional second step turns it into a short narrative persona, a name, a one-line tagline, a first-person quote, and a day-in-the-life paragraph, grounded strictly in the extracted schema values rather than inventing new detail. This maps to a deliverable boutique agencies already produce for their own clients, so it's built as the flagship Premium-tier feature rather than a generic add-on. See PRICING.md for the reasoning behind that choice.
