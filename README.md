@@ -2,7 +2,54 @@
 
 **Live demo:** https://audience-brief-parser-4dwtsrouwolbwzqdqsa6sb.streamlit.app/
 
-A tool that converts loosely written ad campaign briefs into a structured, validated target audience description, so it can be handed off to a data or ML team to query against real first-party and third-party data sources.
+A Streamlit app with three tabs:
+
+- **Single brief:** converts a loosely written ad campaign brief into a structured, validated target audience description (so it can be handed to a data or ML team to query against first-party and third-party data), plus strategic insights and validation questions.
+- **Batch mode:** runs the same extraction over a CSV of up to 50 briefs.
+- **Strategy report:** turns free text or a call transcript about a business into a client-ready, six-section Audience & Channel Strategy you can download as HTML or Markdown.
+
+## Run it locally (Mac)
+
+You need Python 3 and an Anthropic API key.
+
+```bash
+git clone https://github.com/Databite/audience-brief-parser.git
+cd audience-brief-parser
+
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+export ANTHROPIC_API_KEY="sk-ant-..."
+streamlit run app.py
+```
+
+Streamlit opens the app at http://localhost:8501. Stop it with Ctrl+C.
+
+Next time, from the repo folder, you only need:
+
+```bash
+source venv/bin/activate
+export ANTHROPIC_API_KEY="sk-ant-..."
+streamlit run app.py
+```
+
+Notes:
+
+- On a Mac, use `python3`. Outside the venv, bare `pip` and `streamlit` usually aren't on your PATH, so always `source venv/bin/activate` first (your prompt shows `(venv)` when it's active).
+- Instead of exporting the key each time, you can put it in `.streamlit/secrets.toml` as `ANTHROPIC_API_KEY = "sk-ant-..."`. The app checks Streamlit secrets first, then the environment variable. Both `.streamlit/secrets.toml` and `venv/` are gitignored.
+- Usage logging to Google Sheets needs a service account (`gcp_service_account` in Streamlit secrets, or the service account JSON file in the repo folder). Without it, logging fails silently and the app works normally.
+- After pulling new changes, re-run `pip install -r requirements.txt` inside the venv in case dependencies changed.
+
+### Run the tests
+
+```bash
+source venv/bin/activate
+pip install pytest
+python -m pytest tests/
+```
+
+The tests cover the strategy report's prompt, validation and rendering (`strategy_report.py`), using a saved sample report in `tests/fixtures/`. They make no API calls.
 
 ## The problem this solves
 
@@ -13,16 +60,54 @@ An ad brief typically describes a target audience in plain human language, for e
 1. Takes a free-text ad brief as input.
 2. Sends it to Claude with a strict instruction to extract only fields and values from a predefined data dictionary, never to invent new categories.
 3. Validates every returned value against the allowed list for that field, flagging anything that doesn't match.
-4. Splits the results into two groups: first-party attributes (would be queried from the company's own CRM or customer data) and third-party attributes (would be queried from an external data provider).
-5. Surfaces any assumptions the model made when inferring a value from indirect language.
+4. Splits the results into two groups: first-party attributes (would be queried from the company's own CRM or customer data) and third-party attributes (would be queried from an external data provider). First-party values (purchase history, loyalty, email engagement) are inferred from what the brief says about existing customers, for example referrals and repeat clients suggest `repeat_customer`.
+5. Surfaces any assumptions the model made when inferring a value from indirect language, and flags anything the brief mentions that has no matching value in the schema.
+6. Adds 3 to 5 strategic insights that go beyond the schema (which channel to prioritize, which segment is underserved, what messaging angle fits) and 2 to 3 validation questions the business should answer next.
+
+Briefs must be 15 to 3,000 characters.
+
+### Fields and allowed values
+
+| Field | Source | Multi-value | Allowed values |
+|---|---|---|---|
+| `age_range` | 3rd party | yes | 13-17, 18-20, 21-24, 25-29, 30-34, 35-39, 40-44, 45-49, 50-54, 55-59, 60-64, 65-69, 70-74, 75+ |
+| `gender` | 3rd party | no | Female, Male, Other Gender, Unknown Gender |
+| `household_income` | 3rd party | no | Less than $10,000 up to $250,000+ (12 IAB bands) |
+| `urbanization` | 3rd party | no | Rural up to Over 2M+ People (9 IAB bands) |
+| `interests` | 3rd party | yes | 25 IAB top-level interest categories |
+| `social_platforms` | 3rd party | yes | Instagram, TikTok, Facebook, LinkedIn, YouTube, Twitter/X, WhatsApp, Snapchat |
+| `country` | 3rd party | no | Canada, United States, United Kingdom, Australia, India, Other |
+| `employment_type` | 3rd party | yes | Employed professional, Small business owner (incorporated), Small business owner (unincorporated), Self-employed, Student, Retired |
+| `purchase_history_segment` | 1st party | no | first_time_buyer, repeat_customer, high_value, lapsed |
+| `loyalty_tier` | 1st party | no | none, bronze, silver, gold, platinum |
+| `email_engagement` | 1st party | no | high, medium, low, unengaged |
+
+Multi-value fields come back as comma-separated values and each one is validated separately. Single-value fields are validated whole, since some allowed values (like the income bands) contain commas. The full lists live in `DATA_DICTIONARY` in `app.py`.
 
 ## Batch mode
 
-Upload a CSV with a brief_text column (up to 50 rows) to process multiple briefs at once. Before running, the tool estimates the batch's likely cost against your remaining session budget and refuses to start if it would exceed it, rather than running out of budget partway through. Results show a compact summary table plus an expandable detail view per row, with a downloadable CSV of the full output.
+Upload a CSV with a `brief_text` column (up to 50 rows) to process multiple briefs at once; `test_batch.csv` is a sample. Before running, the tool estimates the batch's likely cost against your remaining session budget and refuses to start if it would exceed it, rather than running out of budget partway through. Results show a compact summary table plus an expandable detail view per row, with a downloadable CSV of the full output.
 
 ## Strategy report
 
-The "Strategy report" tab turns free text about a business (a description, notes, a brief or a discovery call transcript, 50 to 40,000 characters, pasted or uploaded as .txt) into a client-ready Audience & Channel Strategy with six sections: target audience cards, four strategic insights, a channel plan with priorities and budgets, platform hashtags with suggested combos, 30-day actions, and open validation questions. The report can be downloaded as a print-ready HTML page (print to PDF for the client) or as Markdown. Prompt, validation and rendering live in `strategy_report.py`; run `python -m pytest tests/` to check them.
+The "Strategy report" tab turns free text about a business into a client-ready Audience & Channel Strategy, the same format as the one-pager Databite delivered by hand to its first pilot client.
+
+**Input.** Pick the input type ("Free text (description, notes or brief)" or "Call transcript"), optionally enter the business name, then paste the text or upload a .txt file. Input must be 50 to 40,000 characters, enough for a roughly 45 minute call transcript.
+
+**Output.** Six sections:
+
+1. **Target audience:** six profile cards (core profile, sharpest segment, why they hire you, what makes them switch, how they find a new provider, where they live online) plus audience tags.
+2. **Strategic insights:** exactly four, each ending in one concrete action.
+3. **Channel plan:** channel, priority (primary, secondary, later), what to do, budget and expected outcome.
+4. **Hashtags:** grouped tags for the most important content platform plus suggested combos per post type, at most five tags per post.
+5. **Next 30 days:** week-by-week actions.
+6. **Open questions:** validation questions, each with why it matters.
+
+**Download.** As a print-ready HTML page (open it and print to PDF for the client) or as Markdown.
+
+**Cost and limits.** One report is estimated at about $0.25 against the session cap. The response is allowed up to 16,000 output tokens so long reports aren't cut off; if one is still cut off, the app shows the sections that arrived, flags what's missing and warns you, instead of failing silently.
+
+Prompt, validation and rendering live in `strategy_report.py`, which has no Streamlit dependency so it can be unit tested.
 
 ## Audience persona generator (Premium feature)
 
@@ -36,7 +121,7 @@ Beyond the core extraction logic, this includes several things a tool needs befo
 
 - **Input validation.** Empty, too-short, or excessively long briefs are rejected with a clear message before any API call is made, so no cost is wasted on invalid input.
 - **Graceful failure handling.** If the AI service is down, rate-limited, or returns an error, the user sees a clear, readable message, never a raw Python traceback.
-- **A session cost cap.** Usage is capped per session ($2.00 by default) to bound worst-case cost exposure from a single visitor, with the cap enforced before both single extractions and batch runs.
+- **A session cost cap.** Usage is capped per session ($2.00 on Basic, $5.00 on Premium) to bound worst-case cost exposure from a single visitor, with the cap enforced before single extractions, batch runs and strategy reports.
 - **A first-time user explainer.** The page leads with a one-line plain-language description of what the tool does; a collapsed section covers the deeper mechanics (the industry-standard schema, the two data categories, what the tool doesn't do) for anyone who wants it.
 - **Operator-side usage logging.** Every extraction attempt (single or batch, successful or failed) is logged to a Google Sheet outside the user's browser session, so usage can be reviewed later even after the visitor's session ends. Logging is best-effort: if it fails for any reason, it fails silently and never blocks or breaks the user's actual request.
 
@@ -55,7 +140,7 @@ This is a public prototype with no privacy policy or data handling agreement, se
 1. **Truncated responses at low token limits.** Longer briefs occasionally produced incomplete JSON in earlier testing. The token limit was raised and the app now detects truncation explicitly via the API's stop_reason, flagging it rather than silently returning an incomplete result.
 2. **No persistence of results.** Usage is logged (see above), but individual extraction results themselves are not saved anywhere; closing the browser tab loses them unless downloaded first.
 3. **No real data source connections.** This produces a validated query intent only, it does not call any actual CRM, data warehouse, or third-party data provider.
-4. **Session-based cost cap, not account-based.** The $2.00 cap resets if a visitor opens a new browser session, so it bounds cost per session, not per person.
+4. **Session-based cost cap, not account-based.** The cap resets if a visitor opens a new browser session, so it bounds cost per session, not per person.
 5. **Plan gating is simulated, not enforced.** The Basic/Premium selector is a sidebar dropdown anyone can switch freely, it demonstrates the tiering UX, not real subscription access control. There's no user account system to tie a real plan to.
 
 ## Tech stack
@@ -64,6 +149,7 @@ This is a public prototype with no privacy policy or data handling agreement, se
 - Streamlit (interface)
 - Anthropic API (Claude) for extraction
 - Pandas (display formatting)
+- pytest (tests for `strategy_report.py`)
 - gspread + Google Sheets API (operator-side usage logging)
 
 See HANDOFF.md for engineering handoff notes, open questions, and what this prototype deliberately doesn't solve. See PRICING.md for the pricing strategy and business model reasoning behind the Basic/Premium split. See GTM.md for the go-to-market channel reasoning.
