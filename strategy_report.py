@@ -20,10 +20,15 @@ import html
 import json
 import re
 
-# Long enough for a ~45 minute discovery call transcript (the pilot
-# transcripts are ~18K characters), short enough to keep one report under
-# roughly $0.15 of API spend.
-MIN_SOURCE_LENGTH = 200
+# The source can be a call transcript, notes, a brief or a free-text
+# description of the business. The max fits a ~45 minute call transcript (the
+# pilot transcripts are ~18K characters) while keeping one report under
+# roughly $0.15 of API spend; the min only rejects input too thin to work from.
+SOURCE_TYPES = {
+    "Free text (description, notes or brief)": "free_text",
+    "Call transcript": "transcript",
+}
+MIN_SOURCE_LENGTH = 50
 MAX_SOURCE_LENGTH = 40000
 REPORT_MAX_TOKENS = 6000
 ESTIMATED_COST_PER_REPORT = 0.15
@@ -46,17 +51,21 @@ SECTION_KEYS = ["audience", "audience_tags", "insights", "channel_plan", "hashta
 def validate_source_input(text):
     stripped = text.strip()
     if len(stripped) < MIN_SOURCE_LENGTH:
-        return False, f"Please paste the call transcript, notes or a detailed brief (at least {MIN_SOURCE_LENGTH} characters)."
+        return False, f"Please describe the business in a bit more detail (at least {MIN_SOURCE_LENGTH} characters): who it serves, what it sells and how customers find it today."
     if len(stripped) > MAX_SOURCE_LENGTH:
         return False, f"That text is too long ({len(stripped)} characters, maximum {MAX_SOURCE_LENGTH}). Trim small talk or split the call into parts."
     return True, None
 
 
-def build_report_prompt(source_text, business_name=""):
+def build_report_prompt(source_text, business_name="", source_type="free_text"):
     business_line = f"The business is called {business_name}." if business_name.strip() else "Infer the business's name from the text if it is stated; otherwise use an empty string."
-    return f"""You are a senior marketing strategist at Databite. Below is source material about one small business: usually a discovery call transcript between a Databite analyst and the business owner, sometimes notes or a brief. {business_line}
+    if source_type == "transcript":
+        source_line = "The source is a discovery call transcript between a Databite analyst and the business owner. Base facts on what the business owner says; ignore filler, small talk and garbled or non-English transcription fragments."
+    else:
+        source_line = "The source is free text written by or about the business: a description, notes or a brief, possibly short. Where it is thin, make the most reasonable assumptions for this kind of business, phrase them as assumptions rather than facts, and aim the validation questions at the biggest gaps."
+    return f"""You are a senior marketing strategist at Databite. Below is source material about one small business. {source_line} {business_line}
 
-Write an "Audience & Channel Strategy" for the owner. Address them directly as "you". Be specific to this business: name their real products, existing assets (newsletters, groups, birthday messages, apps, referral habits), customer segments, geography and deadlines exactly as they describe them. Never write advice that would fit any business in the category. Base facts on what the business owner says; ignore filler, small talk and garbled or non-English transcription fragments. Do not invent statistics about the business; anything you estimate must read as an estimate.
+Write an "Audience & Channel Strategy" for the owner. Address them directly as "you". Be specific to this business: name their real products, existing assets (newsletters, groups, birthday messages, apps, referral habits), customer segments, geography and deadlines exactly as they describe them. Never write advice that would fit any business in the category. Do not invent statistics about the business; anything you estimate must read as an estimate.
 
 Sections to produce:
 
@@ -258,7 +267,10 @@ td { vertical-align:top; padding:12px 8px 12px 0; border-bottom:1px solid var(--
 """
 
 
-def report_to_html(report, month_label="", prepared_by="Databite"):
+SOURCE_FOOTERS = {"transcript": "Built from your discovery call", "free_text": "Built from your brief"}
+
+
+def report_to_html(report, month_label="", prepared_by="Databite", source_type="free_text"):
     """Standalone, print-ready HTML page laid out like the pilot PDF.
     Open it in a browser and use Print > Save as PDF to get the client file."""
     e = lambda s: html.escape(str(s or ""))
@@ -324,7 +336,7 @@ def report_to_html(report, month_label="", prepared_by="Databite"):
             parts.append(f"<li>{e(q.get('question'))}<p>{e(q.get('why_it_matters'))}</p></li>")
         parts.append("</ol></div>")
 
-    footer_right = f"Built from your discovery call{' &middot; ' + e(name) if name else ''}"
+    footer_right = f"{SOURCE_FOOTERS.get(source_type, SOURCE_FOOTERS['free_text'])}{' &middot; ' + e(name) if name else ''}"
     footer_left = " &middot; ".join(e(x) for x in (prepared_by, "Pilot engagement", month_label) if x)
     parts.append(f"<div class='footer'><strong>{footer_left}</strong><span>{footer_right}</span></div>")
     parts.append("</div></body></html>")

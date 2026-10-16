@@ -720,11 +720,13 @@ with tab2:
                 )
 
 with tab3:
-    st.write("Turn a discovery call transcript (or detailed notes) into a client-ready Audience & Channel Strategy: target audience, four strategic insights, a channel plan, hashtags, 30-day actions and open questions.")
-    st.caption(f"Paste between {strategy_report.MIN_SOURCE_LENGTH:,} and {strategy_report.MAX_SOURCE_LENGTH:,} characters, or upload a .txt transcript. One report costs roughly \\${strategy_report.ESTIMATED_COST_PER_REPORT:.2f}.")
+    st.write("Turn anything you know about a business (a free-text description, notes, a brief or a call transcript) into a client-ready Audience & Channel Strategy: target audience, four strategic insights, a channel plan, hashtags, 30-day actions and open questions.")
+    st.caption(f"Paste between {strategy_report.MIN_SOURCE_LENGTH:,} and {strategy_report.MAX_SOURCE_LENGTH:,} characters, or upload a .txt file. The more detail you give, the more specific the report. One report costs roughly \\${strategy_report.ESTIMATED_COST_PER_REPORT:.2f}.")
     report_business = st.text_input("Business name (optional)", key="report_business")
-    report_file = st.file_uploader("Upload transcript (.txt)", type=["txt"], key="report_file")
-    report_text = st.text_area("Or paste the transcript / notes", height=200, key="report_text")
+    report_source_label = st.radio("What are you pasting?", list(strategy_report.SOURCE_TYPES), horizontal=True, key="report_source_type")
+    report_source_type = strategy_report.SOURCE_TYPES[report_source_label]
+    report_text = st.text_area("Describe the business, or paste notes, a brief or a transcript", height=200, key="report_text")
+    report_file = st.file_uploader("Or upload a .txt file", type=["txt"], key="report_file")
 
     if st.button("Build strategy report"):
         source = report_file.getvalue().decode("utf-8", errors="replace") if report_file is not None else report_text
@@ -736,7 +738,7 @@ with tab3:
                 st.warning(error_message)
             else:
                 with st.spinner("Building the strategy report with Claude..."):
-                    prompt = strategy_report.build_report_prompt(source, report_business)
+                    prompt = strategy_report.build_report_prompt(source, report_business, report_source_type)
                     result_text, cost, truncated, api_error = call_claude(prompt, strategy_report.REPORT_MAX_TOKENS)
                 if api_error:
                     st.error(api_error)
@@ -748,6 +750,7 @@ with tab3:
                         st.warning("Response was cut off before completion. The report below may be incomplete.")
                     try:
                         st.session_state.last_report = strategy_report.parse_report(result_text)
+                        st.session_state.last_report_source_type = report_source_type
                         log_event("strategy_report", cost, True)
                     except (json.JSONDecodeError, ValueError):
                         st.session_state.last_report = None
@@ -811,7 +814,7 @@ with tab3:
         file_stem = re.sub(r"[^A-Za-z0-9]+", "-", report["business_name"]).strip("-").lower() or "client"
         st.download_button(
             "Download client report (HTML, print to PDF)",
-            strategy_report.report_to_html(report, month_label=month_label),
+            strategy_report.report_to_html(report, month_label=month_label, source_type=st.session_state.get("last_report_source_type", "free_text")),
             f"{file_stem}-audience-channel-strategy.html",
             "text/html"
         )

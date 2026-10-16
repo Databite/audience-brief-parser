@@ -49,7 +49,9 @@ def test_html_has_all_six_sections_and_escapes():
                     "04 &mdash; LinkedIn hashtags", "05 &mdash; Immediate actions", "06 &mdash; To sharpen this further"]:
         assert heading in page
     assert "Four things that change your approach" in page
-    assert "Built from your discovery call &middot; Rush Me Financial" in page
+    assert "Built from your brief &middot; Rush Me Financial" in page
+    transcript_page = strategy_report.report_to_html(strategy_report.normalize_report(data), source_type="transcript")
+    assert "Built from your discovery call &middot; Rush Me Financial" in transcript_page
     assert "<script>" not in page
 
 
@@ -64,6 +66,14 @@ def test_prompt_contains_source_and_business():
     prompt = strategy_report.build_report_prompt("Some transcript text", "Rush Me Financial")
     assert "Rush Me Financial" in prompt and "Some transcript text" in prompt
     assert '"validation_questions"' in prompt
+    assert "free text" in prompt
+    transcript_prompt = strategy_report.build_report_prompt("Some transcript text", "", "transcript")
+    assert "discovery call transcript" in transcript_prompt
+
+
+def test_short_free_text_is_accepted():
+    text = "Accounting firm in Toronto serving incorporated trades businesses; clients come by word of mouth."
+    assert strategy_report.validate_source_input(text)[0]
 
 
 def test_source_length_limits():
@@ -95,7 +105,7 @@ def test_app_tab_renders_report_with_stubbed_claude():
         default_timeout=30,
     )
     at.run()
-    transcript = "Discovery call transcript. " * 20
+    transcript = "We are a two-person bookkeeping firm for incorporated contractors in Ontario."
     at.text_input(key="report_business").input("Rush Me Financial")
     at.text_area(key="report_text").input(transcript)
     next(b for b in at.button if b.label == "Build strategy report").click().run()

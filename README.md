@@ -22,7 +22,7 @@ Upload a CSV with a brief_text column (up to 50 rows) to process multiple briefs
 
 ## Strategy report
 
-The "Strategy report" tab turns a discovery call transcript (up to 40,000 characters, pasted or uploaded as .txt) into a client-ready Audience & Channel Strategy with six sections: target audience cards, four strategic insights, a channel plan with priorities and budgets, platform hashtags with suggested combos, 30-day actions, and open validation questions. The report can be downloaded as a print-ready HTML page (print to PDF for the client) or as Markdown. Prompt, validation and rendering live in `strategy_report.py`; run `python -m pytest tests/` to check them.
+The "Strategy report" tab turns free text about a business (a description, notes, a brief or a discovery call transcript, 50 to 40,000 characters, pasted or uploaded as .txt) into a client-ready Audience & Channel Strategy with six sections: target audience cards, four strategic insights, a channel plan with priorities and budgets, platform hashtags with suggested combos, 30-day actions, and open validation questions. The report can be downloaded as a print-ready HTML page (print to PDF for the client) or as Markdown. Prompt, validation and rendering live in `strategy_report.py`; run `python -m pytest tests/` to check them.
 
 ## Audience persona generator (Premium feature)
 
