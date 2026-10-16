@@ -168,7 +168,9 @@ def validate_brief_input(text):
 
 def build_prompt(brief_text):
     field_list = "\n".join([f'- {name}: allowed values are {info["allowed"]}' for name, info in DATA_DICTIONARY.items()])
-    prompt = f"""You are a marketing data analyst. Read the ad brief below and extract a structured target audience description.
+    prompt = f"""You are a senior marketing strategist and data analyst. Read the ad brief below and do two things:
+1. Extract a structured target audience description using the allowed fields and values.
+2. Provide strategic recommendations that go beyond the schema — real insights a marketer can act on.
 
 Only use these fields, and only these allowed values for each field:
 {field_list}
@@ -177,7 +179,11 @@ Rules:
 1. If the brief does not give enough information to confidently pick a value for a field, use the exact string "not specified" for that field. Do not guess.
 2. If you infer a value from indirect language, for example inferring household_income from a phrase like "disposable income", still provide the value, but also list that inference in the assumptions list below. Keep each assumption to one short sentence.
 3. If the brief mentions something relevant that has no matching allowed value in the schema, note it explicitly in the assumptions list rather than dropping it silently.
-4. Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
+4. For 1st-party fields (purchase_history_segment, loyalty_tier, email_engagement): infer the most likely value from what the business describes about their existing customer relationship. For example, if the business mentions referrals and repeat clients, infer purchase_history_segment as "repeat_customer". If the brief describes a brand-new product launch with no existing customers, infer "first_time_buyer". Use "not specified" only if there is genuinely no signal in the brief.
+5. For multi-value fields like interests and social_platforms, return a comma-separated string of all applicable allowed values (e.g. "LinkedIn, Instagram, YouTube").
+6. In the "insights" field, provide 3–5 strategic recommendations that go BEYOND the taxonomy fields. These should be specific, actionable observations — such as which channel to prioritize and why, which audience segment is underserved, what messaging angle fits this audience best, or what the brief implies but doesn't state. Write these as a senior marketing strategist would: direct, specific, and worth acting on. Do not restate the schema values.
+7. In the "validation_questions" field, list 2–3 questions the business should answer to validate or refine these audience assumptions. Frame them as next-step questions, not disclaimers.
+8. Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
 {{
   "age_range": "...",
   "gender": "...",
@@ -188,7 +194,9 @@ Rules:
   "purchase_history_segment": "...",
   "loyalty_tier": "...",
   "email_engagement": "...",
-  "assumptions": ["...", "..."]
+  "assumptions": ["...", "..."],
+  "insights": ["...", "...", "..."],
+  "validation_questions": ["...", "...", "..."]
 }}
 
 Ad brief:
@@ -239,7 +247,7 @@ def call_claude(prompt, max_tokens):
 
 def llm_extract(brief_text):
     prompt = build_prompt(brief_text)
-    return call_claude(prompt, 1500)
+    return call_claude(prompt, 1800)
 
 def build_persona_prompt(parsed_schema):
     """Build a prompt that turns an already-extracted audience schema into a
@@ -250,7 +258,7 @@ def build_persona_prompt(parsed_schema):
     the persona should reflect what the tool actually extracted and
     validated, not re-derive its own interpretation of the raw brief.
     """
-    schema_lines = "\n".join([f"- {field}: {value}" for field, value in parsed_schema.items() if field != "assumptions"])
+    schema_lines = "\n".join([f"- {field}: {value}" for field, value in parsed_schema.items() if field not in ("assumptions", "insights", "validation_questions")])
     return f"""You are a marketing strategist writing a short audience persona for an internal creative deck, based on a validated target audience schema.
 
 Audience schema:
@@ -304,8 +312,14 @@ def validate_against_dictionary(parsed_json):
     flags = []
     for field, info in DATA_DICTIONARY.items():
         value = parsed_json.get(field, "not specified")
-        if value != "not specified" and value not in info["allowed"]:
-            flags.append(f"'{field}' returned value '{value}', which is not in the allowed list {info['allowed']}")
+        if value == "not specified":
+            continue
+        # Multi-value fields (interests, social_platforms) come back as
+        # comma-joined strings. Validate each item individually.
+        items = [v.strip() for v in value.split(",")] if isinstance(value, str) else [value]
+        for item in items:
+            if item not in info["allowed"]:
+                flags.append(f"'{field}' contains '{item}', which is not in the allowed list {info['allowed']}")
     return flags
 
 if "total_cost" not in st.session_state:
@@ -338,7 +352,7 @@ with st.expander("How does this actually work? (for the curious)"):
     st.markdown("""
 **The problem this solves:** Marketers write audience descriptions in plain language, like "environmentally conscious millennials with disposable income." That's not something a data system can search for directly, it needs specific, predefined field values instead.
 
-**What this tool does:** Paste in a plain-language ad brief, and it converts that description into a structured set of fields with real values, things like an age range, an income bracket, and a list of interests, all pulled from a real industry-standard vocabulary rather than made up on the spot.
+**What this tool does:** Paste in a plain-language ad brief, and it converts that description into a structured set of fields with real values, things like an age range, an income bracket, and a list of interests, all pulled from a real industry-standard vocabulary rather than made up on the spot. It also generates strategic recommendations specific to the brief.
 
 **Why two categories, "1st-party" and "3rd-party":** Some information (like whether someone already bought from your company before) would come from your own customer records. Other information (like their age range or interests) would typically be purchased from an outside data provider. This tool sorts the results into those two groups, since in a real setting each group is looked up in a completely different place.
 
@@ -426,6 +440,22 @@ with tab1:
                 st.warning(a)
         else:
             st.write("No assumptions flagged.")
+
+        insights = parsed.get("insights", [])
+        st.subheader("Strategic recommendations")
+        if insights:
+            for insight in insights:
+                st.info(insight)
+        else:
+            st.write("No strategic recommendations generated.")
+
+        validation_questions = parsed.get("validation_questions", [])
+        st.subheader("Questions to validate with your client")
+        if validation_questions:
+            for q in validation_questions:
+                st.success(q)
+        else:
+            st.write("No validation questions generated.")
 
         st.divider()
         st.subheader("Audience persona (Premium feature)")
@@ -518,6 +548,8 @@ with tab2:
                             "truncated": False,
                             "validation_flags": f"input rejected: {error_message}",
                             "assumptions": "",
+                            "insights": "",
+                            "validation_questions": "",
                             "raw_response": "",
                             "persona_name": "",
                             "persona_tagline": "",
@@ -540,6 +572,8 @@ with tab2:
                             "truncated": False,
                             "validation_flags": f"API error: {api_error}",
                             "assumptions": "",
+                            "insights": "",
+                            "validation_questions": "",
                             "raw_response": "",
                             "persona_name": "",
                             "persona_tagline": "",
@@ -567,6 +601,8 @@ with tab2:
                             "truncated": truncated,
                             "validation_flags": "; ".join(flags) if flags else "none",
                             "assumptions": "; ".join(parsed.get("assumptions", [])),
+                            "insights": "; ".join(parsed.get("insights", [])),
+                            "validation_questions": "; ".join(parsed.get("validation_questions", [])),
                             "raw_response": "",
                             "persona_name": "",
                             "persona_tagline": "",
@@ -603,6 +639,8 @@ with tab2:
                             "truncated": truncated,
                             "validation_flags": "could not parse response" + (" (truncated)" if truncated else ""),
                             "assumptions": "",
+                            "insights": "",
+                            "validation_questions": "",
                             "raw_response": result_text,
                             "persona_name": "",
                             "persona_tagline": "",
@@ -639,6 +677,10 @@ with tab2:
                         st.write(r["validation_flags"])
                         st.markdown("**Assumptions:**")
                         st.write(r["assumptions"] if r["assumptions"] else "None")
+                        st.markdown("**Strategic recommendations:**")
+                        st.write(r["insights"] if r["insights"] else "None")
+                        st.markdown("**Validation questions:**")
+                        st.write(r["validation_questions"] if r["validation_questions"] else "None")
                         if r.get("persona_name"):
                             st.markdown("**Audience persona (Premium):**")
                             st.markdown(f"**{r['persona_name']}** — {r['persona_tagline']}")
