@@ -1,4 +1,4 @@
-# Engineering Handoff: Ad Brief to Audience Schema Translator
+# Engineering Handoff: Databite Audience Toolkit
 
 ## The problem this addresses
 

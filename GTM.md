@@ -1,4 +1,4 @@
-# Go-to-Market Strategy: Ad Brief to Audience Schema Translator
+# Go-to-Market Strategy: Databite Audience Toolkit
 
 Like PRICING.md, this is a reasoning exercise, not an executed plan. No outreach has actually happened, no community post has gone out. This documents the thinking, including a course correction partway through, rather than a clean final answer.
 

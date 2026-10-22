@@ -11,7 +11,7 @@ import strategy_report
 from google.oauth2.service_account import Credentials
 
 st.set_page_config(
-    page_title="Ad Brief to Audience Schema Translator",
+    page_title="Databite Audience Toolkit",
     page_icon="🎯",
     layout="centered"
 )
@@ -365,8 +365,8 @@ def current_cost_cap():
 def remaining_budget():
     return max(0.0, current_cost_cap() - st.session_state.total_cost)
 
-st.title("Ad Brief to Audience Schema Translator")
-st.write("Turn a plain-language ad brief into a structured audience profile, ready to hand off to your data team.")
+st.title("Databite Audience Toolkit")
+st.write("Audience schema extraction for ad briefs, and client-ready Audience & Channel Strategy reports for small businesses.")
 
 with st.expander("How does this actually work? (for the curious)"):
     st.markdown("""
@@ -375,6 +375,8 @@ with st.expander("How does this actually work? (for the curious)"):
 **What this tool does:** Paste in a plain-language ad brief, and it converts that description into a structured set of fields with real values, things like an age range, an income bracket, and a list of interests, all pulled from a real industry-standard vocabulary rather than made up on the spot. It also generates strategic recommendations specific to the brief.
 
 **Why two categories, "1st-party" and "3rd-party":** Some information (like whether someone already bought from your company before) would come from your own customer records. Other information (like their age range or interests) would typically be purchased from an outside data provider. This tool sorts the results into those two groups, since in a real setting each group is looked up in a completely different place.
+
+**The Strategy report tab:** Paste notes or a call transcript about a business, and it writes a six-section Audience & Channel Strategy: who to target, which channels to use first, and what to do in the next 30 days.
 
 **What it doesn't do:** It doesn't actually connect to any real customer database or purchase real audience data, it only produces the structured request you'd hand off to whoever manages those systems.
 """)
