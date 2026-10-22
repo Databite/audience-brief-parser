@@ -51,11 +51,17 @@ python -m pytest tests/
 
 The tests cover the strategy report's prompt, validation and rendering (`strategy_report.py`), using a saved sample report in `tests/fixtures/`. They make no API calls.
 
-## The problem this solves
+## The problems this solves
 
-An ad brief typically describes a target audience in plain human language, for example "environmentally conscious millennials with disposable income." That description isn't queryable against a real data system. A data team needs actual field values that match a defined schema. This tool does that translation and, critically, validates the AI's output against a fixed set of allowed values, so it never silently hands downstream systems a value that doesn't exist in the real data dictionary.
+The app answers two related questions, one for each kind of user.
+
+**"What would a data team actually query?"** (Single brief and Batch mode tabs.) An ad brief typically describes a target audience in plain human language, for example "environmentally conscious millennials with disposable income." That description isn't queryable against a real data system. A data team needs actual field values that match a defined schema. This tool does that translation and, critically, validates the AI's output against a fixed set of allowed values, so it never silently hands downstream systems a value that doesn't exist in the real data dictionary.
+
+**"Who is my best customer, and where and how do I reach them?"** (Strategy report tab.) A small business owner usually can't answer that from a schema. They need a plain-language plan they can act on this month. The Strategy report turns what they say about their business, in notes or on a discovery call, into a client-ready Audience & Channel Strategy: who to target, which channels to use first, and what to do in the next 30 days. See [Strategy report](#strategy-report) below.
 
 ## What it does
+
+### Single brief and batch mode: audience schema extraction
 
 1. Takes a free-text ad brief as input.
 2. Sends it to Claude with a strict instruction to extract only fields and values from a predefined data dictionary, never to invent new categories.
@@ -66,7 +72,7 @@ An ad brief typically describes a target audience in plain human language, for e
 
 Briefs must be 15 to 3,000 characters.
 
-### Fields and allowed values
+#### Fields and allowed values
 
 | Field | Source | Multi-value | Allowed values |
 |---|---|---|---|
