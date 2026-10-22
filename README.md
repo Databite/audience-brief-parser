@@ -38,7 +38,7 @@ Notes:
 
 - On a Mac, use `python3`. Outside the venv, bare `pip` and `streamlit` usually aren't on your PATH, so always `source venv/bin/activate` first (your prompt shows `(venv)` when it's active).
 - Instead of exporting the key each time, you can put it in `.streamlit/secrets.toml` as `ANTHROPIC_API_KEY = "sk-ant-..."`. The app checks Streamlit secrets first, then the environment variable. Both `.streamlit/secrets.toml` and `venv/` are gitignored.
-- Usage logging to Google Sheets needs a service account (`gcp_service_account` in Streamlit secrets, or the service account JSON file in the repo folder). Without it, logging fails silently and the app works normally.
+- Usage logging to Google Sheets needs a service account (`gcp_service_account` in Streamlit secrets, or the JSON key file named in `SERVICE_ACCOUNT_FILE` in `app.py`, placed in the repo folder; it's gitignored). Without it, logging fails silently and the app works normally.
 - After pulling new changes, re-run `pip install -r requirements.txt` inside the venv in case dependencies changed.
 
 ### Run the tests
@@ -86,7 +86,7 @@ Multi-value fields come back as comma-separated values and each one is validated
 
 ## Batch mode
 
-Upload a CSV with a `brief_text` column (up to 50 rows) to process multiple briefs at once; `test_batch.csv` is a sample. Before running, the tool estimates the batch's likely cost against your remaining session budget and refuses to start if it would exceed it, rather than running out of budget partway through. Results show a compact summary table plus an expandable detail view per row, with a downloadable CSV of the full output.
+Upload a CSV with a `brief_text` column (up to 50 rows) to process multiple briefs at once; `test_batch.csv` is a sample. Before running, the tool estimates the batch's likely cost against your remaining session budget and refuses to start if it would exceed it, rather than running out of budget partway through. On the Premium plan you can also tick a box to generate a persona for each row, which adds a second API call per row and is included in the cost estimate. If the session cap is reached partway through anyway, the batch stops and shows the rows it finished. Results show a compact summary table plus an expandable detail view per row, with a downloadable CSV of the full output.
 
 ## Strategy report
 
@@ -123,7 +123,7 @@ Beyond the core extraction logic, this includes several things a tool needs befo
 - **Graceful failure handling.** If the AI service is down, rate-limited, or returns an error, the user sees a clear, readable message, never a raw Python traceback.
 - **A session cost cap.** Usage is capped per session ($2.00 on Basic, $5.00 on Premium) to bound worst-case cost exposure from a single visitor, with the cap enforced before single extractions, batch runs and strategy reports.
 - **A first-time user explainer.** The page leads with a one-line plain-language description of what the tool does; a collapsed section covers the deeper mechanics (the industry-standard schema, the two data categories, what the tool doesn't do) for anyone who wants it.
-- **Operator-side usage logging.** Every extraction attempt (single or batch, successful or failed) is logged to a Google Sheet outside the user's browser session, so usage can be reviewed later even after the visitor's session ends. Logging is best-effort: if it fails for any reason, it fails silently and never blocks or breaks the user's actual request.
+- **Operator-side usage logging.** Every API call attempt (single extraction, batch row, persona and strategy report, successful or failed) is logged to a Google Sheet as a timestamp, event type, cost and success flag, outside the user's browser session, so usage can be reviewed later even after the visitor's session ends. Logging is best-effort: if it fails for any reason, it fails silently and never blocks or breaks the user's actual request.
 
 ## Grounding in a real industry standard
 
@@ -137,8 +137,8 @@ This is a public prototype with no privacy policy or data handling agreement, se
 
 ## Known limitations
 
-1. **Truncated responses at low token limits.** Longer briefs occasionally produced incomplete JSON in earlier testing. The token limit was raised and the app now detects truncation explicitly via the API's stop_reason, flagging it rather than silently returning an incomplete result.
-2. **No persistence of results.** Usage is logged (see above), but individual extraction results themselves are not saved anywhere; closing the browser tab loses them unless downloaded first.
+1. **Truncated responses at low token limits.** Longer briefs occasionally produced incomplete JSON in earlier testing. The token limits were raised (1,800 output tokens for extraction, 16,000 for strategy reports) and the app now detects truncation explicitly via the API's stop_reason, flagging it rather than silently returning an incomplete result.
+2. **No persistence of results.** Usage is logged (see above), but extraction results, personas and strategy reports themselves are not saved anywhere; closing the browser tab loses them unless downloaded first.
 3. **No real data source connections.** This produces a validated query intent only, it does not call any actual CRM, data warehouse, or third-party data provider.
 4. **Session-based cost cap, not account-based.** The cap resets if a visitor opens a new browser session, so it bounds cost per session, not per person.
 5. **Plan gating is simulated, not enforced.** The Basic/Premium selector is a sidebar dropdown anyone can switch freely, it demonstrates the tiering UX, not real subscription access control. There's no user account system to tie a real plan to.
@@ -147,7 +147,7 @@ This is a public prototype with no privacy policy or data handling agreement, se
 
 - Python
 - Streamlit (interface)
-- Anthropic API (Claude) for extraction
+- Anthropic API: Claude Sonnet 5 (`MODEL` in `app.py`) for extraction, personas and strategy reports. Costs shown in the app are estimated from per-token prices set in `app.py`.
 - Pandas (display formatting)
 - pytest (tests for `strategy_report.py`)
 - gspread + Google Sheets API (operator-side usage logging)
