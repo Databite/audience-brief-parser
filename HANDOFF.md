@@ -1,4 +1,4 @@
-# Engineering Handoff: Ad Brief to Audience Schema Translator
+# Engineering Handoff: Databite Audience Toolkit
 
 ## The problem this addresses
 
@@ -11,7 +11,7 @@ An LLM can extract structured values from unstructured brief text and be constra
 ## What I deliberately did not solve
 
 - **No connection to real data sources.** This produces a validated query intent only. It does not call any actual CRM, data warehouse, or third-party data provider (LiveRamp, Experian, etc.). Wiring this to real systems is a separate integration project, and a meaningfully larger one, since it involves real contracts, data access agreements, and privacy review that this prototype has no visibility into.
-- **No persistence or versioning.** Nothing is saved. If a brief is revised, there's no history of what changed or why the extracted schema changed with it.
+- **No persistence or versioning.** Results are not saved (only a usage log row per call goes to the operator Google Sheet). If a brief is revised, there's no history of what changed or why the extracted schema changed with it.
 - **First-party field values are illustrative, not real.** `purchase_history_segment`, `loyalty_tier`, and `email_engagement` are placeholders I constructed, since no public standard exists for internal CRM segmentation. A real implementation needs these mapped to whatever schema the actual CRM uses, which will differ by company.
 
 ## Open questions for engineering
@@ -40,7 +40,7 @@ This is the inverse order from the compliance scorer, where rules ran first, bec
 
 ## Audience persona generator and the plan-gating bug
 
-The persona generator is a fourth, optional LLM call: it takes the already-validated schema (not the raw brief) and turns it into a short narrative persona. It's kept as an explicit opt-in button rather than running automatically after every extraction, so cost isn't incurred on a call the user didn't ask for.
+The persona generator is an optional extra LLM call (the second per brief now that the self-check call is gone): it takes the already-validated schema (not the raw brief) and turns it into a short narrative persona. It's kept as an explicit opt-in button rather than running automatically after every extraction, so cost isn't incurred on a call the user didn't ask for.
 
 **A real bug worth documenting.** The first working version of this button had a genuine Streamlit gotcha: Streamlit reruns the entire script top to bottom on every widget interaction, and `st.button()` only returns `True` on the exact run it was clicked on. The extraction results and the persona button both lived inside `if st.button("Extract audience schema")`. Clicking "Generate persona" triggers a rerun, and on that rerun the extract button's condition is `False` again, which silently dropped the whole results block, schema tables, assumptions, and the persona button itself, out of the render. The fix: extraction results and the generated persona are now persisted in `st.session_state` and rendered from there, independent of which button was clicked on a given rerun, the same pattern Streamlit's own docs recommend for any UI where one button's result needs to survive a second button's click. Worth checking for this same pattern anywhere else multi-button interaction gets added later.
 
@@ -48,7 +48,7 @@ The persona generator is a fourth, optional LLM call: it takes the already-valid
 
 ## Strategy report
 
-The "Strategy report" tab (`strategy_report.py`) is a separate pipeline from schema extraction: one LLM call turns free text or a call transcript (50 to 40,000 characters) into a six-section Audience & Channel Strategy as JSON, which is then normalized, checked by `validate_report()` and rendered to HTML or Markdown. The output budget is 16,000 tokens because a full report runs about 5,000 to 8,000 output tokens and a 6,000 limit cut real reports off mid-JSON. If a response is still truncated, `repair_truncated_json()` salvages the complete sections and the UI warns about what's missing. The module has no Streamlit dependency and is covered by `tests/test_strategy_report.py`.
+The "Strategy report" tab (`strategy_report.py`) is a separate pipeline from schema extraction: one LLM call turns free text or a call transcript (50 to 40,000 characters) into a six-section Audience & Channel Strategy as JSON, which is then normalized, checked by `validate_report()` and rendered to HTML or Markdown. The output budget is 16,000 tokens because a full report runs about 5,000 to 8,000 output tokens and a 6,000 limit cut real reports off mid-JSON. If a response is still truncated, `repair_truncated_json()` salvages the complete sections and the UI warns about what's missing. The module has no Streamlit dependency and is covered by `tests/test_strategy_report.py`. Strategy reports share the per-session cost cap and are logged as `strategy_report` events.
 
 ## Stage 5: legal and compliance groundwork (not addressed)
 

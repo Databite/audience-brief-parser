@@ -1,4 +1,6 @@
-# Ad Brief to Audience Schema Translator
+# Databite Audience Toolkit
+
+Audience schema extraction for ad briefs, and client-ready Audience & Channel Strategy reports for small businesses.
 
 **Live demo:** https://audience-brief-parser-4dwtsrouwolbwzqdqsa6sb.streamlit.app/
 
@@ -38,7 +40,7 @@ Notes:
 
 - On a Mac, use `python3`. Outside the venv, bare `pip` and `streamlit` usually aren't on your PATH, so always `source venv/bin/activate` first (your prompt shows `(venv)` when it's active).
 - Instead of exporting the key each time, you can put it in `.streamlit/secrets.toml` as `ANTHROPIC_API_KEY = "sk-ant-..."`. The app checks Streamlit secrets first, then the environment variable. Both `.streamlit/secrets.toml` and `venv/` are gitignored.
-- Usage logging to Google Sheets needs a service account (`gcp_service_account` in Streamlit secrets, or the service account JSON file in the repo folder). Without it, logging fails silently and the app works normally.
+- Usage logging to Google Sheets needs a service account (`gcp_service_account` in Streamlit secrets, or the JSON key file named in `SERVICE_ACCOUNT_FILE` in `app.py`, placed in the repo folder; it's gitignored). Without it, logging fails silently and the app works normally.
 - After pulling new changes, re-run `pip install -r requirements.txt` inside the venv in case dependencies changed.
 
 ### Run the tests
@@ -51,11 +53,17 @@ python -m pytest tests/
 
 The tests cover the strategy report's prompt, validation and rendering (`strategy_report.py`), using a saved sample report in `tests/fixtures/`. They make no API calls.
 
-## The problem this solves
+## The problems this solves
 
-An ad brief typically describes a target audience in plain human language, for example "environmentally conscious millennials with disposable income." That description isn't queryable against a real data system. A data team needs actual field values that match a defined schema. This tool does that translation and, critically, validates the AI's output against a fixed set of allowed values, so it never silently hands downstream systems a value that doesn't exist in the real data dictionary.
+The app answers two related questions, one for each kind of user.
+
+**"What would a data team actually query?"** (Single brief and Batch mode tabs.) An ad brief typically describes a target audience in plain human language, for example "environmentally conscious millennials with disposable income." That description isn't queryable against a real data system. A data team needs actual field values that match a defined schema. This tool does that translation and, critically, validates the AI's output against a fixed set of allowed values, so it never silently hands downstream systems a value that doesn't exist in the real data dictionary.
+
+**"Who is my best customer, and where and how do I reach them?"** (Strategy report tab.) A small business owner usually can't answer that from a schema. They need a plain-language plan they can act on this month. The Strategy report turns what they say about their business, in notes or on a discovery call, into a client-ready Audience & Channel Strategy: who to target, which channels to use first, and what to do in the next 30 days. See [Strategy report](#strategy-report) below.
 
 ## What it does
+
+### Single brief and batch mode: audience schema extraction
 
 1. Takes a free-text ad brief as input.
 2. Sends it to Claude with a strict instruction to extract only fields and values from a predefined data dictionary, never to invent new categories.
@@ -66,7 +74,7 @@ An ad brief typically describes a target audience in plain human language, for e
 
 Briefs must be 15 to 3,000 characters.
 
-### Fields and allowed values
+#### Fields and allowed values
 
 | Field | Source | Multi-value | Allowed values |
 |---|---|---|---|
@@ -86,7 +94,7 @@ Multi-value fields come back as comma-separated values and each one is validated
 
 ## Batch mode
 
-Upload a CSV with a `brief_text` column (up to 50 rows) to process multiple briefs at once; `test_batch.csv` is a sample. Before running, the tool estimates the batch's likely cost against your remaining session budget and refuses to start if it would exceed it, rather than running out of budget partway through. Results show a compact summary table plus an expandable detail view per row, with a downloadable CSV of the full output.
+Upload a CSV with a `brief_text` column (up to 50 rows) to process multiple briefs at once; `test_batch.csv` is a sample. Before running, the tool estimates the batch's likely cost against your remaining session budget and refuses to start if it would exceed it, rather than running out of budget partway through. On the Premium plan you can also tick a box to generate a persona for each row, which adds a second API call per row and is included in the cost estimate. If the session cap is reached partway through anyway, the batch stops and shows the rows it finished. Results show a compact summary table plus an expandable detail view per row, with a downloadable CSV of the full output.
 
 ## Strategy report
 
@@ -123,7 +131,7 @@ Beyond the core extraction logic, this includes several things a tool needs befo
 - **Graceful failure handling.** If the AI service is down, rate-limited, or returns an error, the user sees a clear, readable message, never a raw Python traceback.
 - **A session cost cap.** Usage is capped per session ($2.00 on Basic, $5.00 on Premium) to bound worst-case cost exposure from a single visitor, with the cap enforced before single extractions, batch runs and strategy reports.
 - **A first-time user explainer.** The page leads with a one-line plain-language description of what the tool does; a collapsed section covers the deeper mechanics (the industry-standard schema, the two data categories, what the tool doesn't do) for anyone who wants it.
-- **Operator-side usage logging.** Every extraction attempt (single or batch, successful or failed) is logged to a Google Sheet outside the user's browser session, so usage can be reviewed later even after the visitor's session ends. Logging is best-effort: if it fails for any reason, it fails silently and never blocks or breaks the user's actual request.
+- **Operator-side usage logging.** Every API call attempt (single extraction, batch row, persona and strategy report, successful or failed) is logged to a Google Sheet as a timestamp, event type, cost and success flag, outside the user's browser session, so usage can be reviewed later even after the visitor's session ends. Logging is best-effort: if it fails for any reason, it fails silently and never blocks or breaks the user's actual request.
 
 ## Grounding in a real industry standard
 
@@ -137,8 +145,8 @@ This is a public prototype with no privacy policy or data handling agreement, se
 
 ## Known limitations
 
-1. **Truncated responses at low token limits.** Longer briefs occasionally produced incomplete JSON in earlier testing. The token limit was raised and the app now detects truncation explicitly via the API's stop_reason, flagging it rather than silently returning an incomplete result.
-2. **No persistence of results.** Usage is logged (see above), but individual extraction results themselves are not saved anywhere; closing the browser tab loses them unless downloaded first.
+1. **Truncated responses at low token limits.** Longer briefs occasionally produced incomplete JSON in earlier testing. The token limits were raised (1,800 output tokens for extraction, 16,000 for strategy reports) and the app now detects truncation explicitly via the API's stop_reason, flagging it rather than silently returning an incomplete result.
+2. **No persistence of results.** Usage is logged (see above), but extraction results, personas and strategy reports themselves are not saved anywhere; closing the browser tab loses them unless downloaded first.
 3. **No real data source connections.** This produces a validated query intent only, it does not call any actual CRM, data warehouse, or third-party data provider.
 4. **Session-based cost cap, not account-based.** The cap resets if a visitor opens a new browser session, so it bounds cost per session, not per person.
 5. **Plan gating is simulated, not enforced.** The Basic/Premium selector is a sidebar dropdown anyone can switch freely, it demonstrates the tiering UX, not real subscription access control. There's no user account system to tie a real plan to.
@@ -147,7 +155,7 @@ This is a public prototype with no privacy policy or data handling agreement, se
 
 - Python
 - Streamlit (interface)
-- Anthropic API (Claude) for extraction
+- Anthropic API: Claude Sonnet 5 (`MODEL` in `app.py`) for extraction, personas and strategy reports. Costs shown in the app are estimated from per-token prices set in `app.py`.
 - Pandas (display formatting)
 - pytest (tests for `strategy_report.py`)
 - gspread + Google Sheets API (operator-side usage logging)

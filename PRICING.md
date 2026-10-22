@@ -1,4 +1,4 @@
-# Pricing Strategy: Ad Brief to Audience Schema Translator
+# Pricing Strategy: Databite Audience Toolkit
 
 This document is part of a deliberate learning exercise: walking one prototype through the stages of an idea-to-product lifecycle a real company would go through, including business model thinking, independent of actual market validation. The reasoning below is informed guessing calibrated against unit economics and comparable products, not research from real prospects. That distinction matters and is called out explicitly rather than presented as validated pricing.
 
