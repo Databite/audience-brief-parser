@@ -1,4 +1,6 @@
-# Ad Brief to Audience Schema Translator
+# Databite Audience Toolkit
+
+Audience schema extraction for ad briefs, and client-ready Audience & Channel Strategy reports for small businesses.
 
 **Live demo:** https://audience-brief-parser-4dwtsrouwolbwzqdqsa6sb.streamlit.app/
 
