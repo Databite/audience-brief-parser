@@ -13,14 +13,14 @@ sys.path.insert(0, str(ROOT))
 import launch_kit  # noqa: E402
 import strategy_report  # noqa: E402
 
-KIT_FIXTURE = (ROOT / "tests" / "fixtures" / "rush_me_linkedin_kit.json").read_text()
-REPORT_FIXTURE = (ROOT / "tests" / "fixtures" / "rush_me_report.json").read_text()
+KIT_FIXTURE = (ROOT / "tests" / "fixtures" / "advisor_linkedin_kit.json").read_text()
+REPORT_FIXTURE = (ROOT / "tests" / "fixtures" / "advisor_report.json").read_text()
 
 
 def test_parse_kit_is_complete():
     kit = launch_kit.parse_kit("```json\n" + KIT_FIXTURE + "\n```")
     assert launch_kit.validate_kit(kit) == []
-    assert launch_kit.kit_title(kit) == "LinkedIn Launch Kit: Rush Me Financial"
+    assert launch_kit.kit_title(kit) == "LinkedIn Launch Kit: Maple Advisory Group"
 
 
 def test_validate_flags_ads_without_qualifying_questions():
@@ -60,9 +60,9 @@ def test_kit_renders_and_escapes():
 
 
 def test_kit_prompt_carries_channel_dates_and_budget():
-    prompt = launch_kit.build_kit_prompt("Strategy text", "LinkedIn", "Rush Me Financial", datetime.date(2026, 12, 1),
+    prompt = launch_kit.build_kit_prompt("Strategy text", "LinkedIn", "Maple Advisory Group", datetime.date(2026, 12, 1),
                                          "investment season Dec-Feb", "$300-500/month", "travelling in November")
-    for text in ["LinkedIn", "Rush Me Financial", "December 1, 2026", "investment season Dec-Feb", "$300-500/month", "travelling in November", "qualifies_if"]:
+    for text in ["LinkedIn", "Maple Advisory Group", "December 1, 2026", "investment season Dec-Feb", "$300-500/month", "travelling in November", "qualifies_if"]:
         assert text in prompt
 
 
@@ -118,6 +118,6 @@ def test_app_builds_kit_from_report_with_stubbed_claude():
     next(b for b in at.button if b.label == "Build launch kit").click().run()
     assert not at.exception
     headers = [h.value for h in at.header] + [s.value for s in at.subheader]
-    assert "LinkedIn Launch Kit: Rush Me Financial" in headers
+    assert "LinkedIn Launch Kit: Maple Advisory Group" in headers
     for section in ["Checklist", "Posts", "Ads", "Lead form", "Targeting and budget", "Reply scripts"]:
         assert section in headers

@@ -1,5 +1,5 @@
 {
-  "business_name": "Rush Me Financial",
+  "business_name": "Maple Advisory Group",
   "channel": "LinkedIn",
   "goal": "Book 3 appointments with incorporated owners or established professionals from LinkedIn by Jan 31.",
   "qualified_lead": "A Canadian resident of 10+ years, household income $100K+ or owns a corporation, who books and attends a call.",
@@ -18,7 +18,7 @@
       {"question": "How long have you lived in Canada?", "answers": ["Under 5 years", "5-10 years", "10+ years"], "qualifies_if": "10+ years"}
     ],
     "privacy_note": "We only use your details to contact you about this review.",
-    "thank_you": "Thanks! Vijay will call you within one business day to book a time."
+    "thank_you": "Thanks! We will call you within one business day to book a time."
   },
   "targeting": [
     {"setting": "Location", "value": "Ontario, Canada"},
