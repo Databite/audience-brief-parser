@@ -50,6 +50,14 @@ The persona generator is an optional extra LLM call (the second per brief now th
 
 The "Strategy report" tab (`strategy_report.py`) is a separate pipeline from schema extraction: one LLM call turns free text or a call transcript (50 to 40,000 characters) into a six-section Audience & Channel Strategy as JSON, which is then normalized, checked by `validate_report()` and rendered to HTML or Markdown. The output budget is 16,000 tokens because a full report runs about 5,000 to 8,000 output tokens and a 6,000 limit cut real reports off mid-JSON. If a response is still truncated, `repair_truncated_json()` salvages the complete sections and the UI warns about what's missing. The module has no Streamlit dependency and is covered by `tests/test_strategy_report.py`. Strategy reports share the per-session cost cap and are logged as `strategy_report` events.
 
+Reports take a plan start date and optional key dates; `plan_dates_line()` turns them into the prompt line that makes timeframes real calendar dates. Every channel row and 30-day action carries a `success_measure`, and `validate_report()` flags channels without one. The prompt used to require an insight that turned an existing asset into a referral source; a pilot client tried the resulting referral ask without results, so the prompt now bases referral advice on how clients actually arrive and frames new asks as tests.
+
+## Launch kit
+
+The "Launch kit" tab (`launch_kit.py`) takes one channel from a strategy report in session state (or pasted text) and returns posts, ads, a lead form with qualifying questions, targeting, budget, reply scripts, a dated checklist and success measures as JSON, with a 12,000 token output budget. It reuses `strategy_report.repair_truncated_json()` for cut-off responses and the report's CSS for the HTML download. `validate_kit()` flags a kit with ads but no qualifying questions. Kits are logged as `launch_kit` events and covered by `tests/test_launch_kit.py`.
+
+The tab order is Strategy report, Launch kit, For agencies (Single brief and Batch mode as nested tabs), because the beta clients are small businesses and never used the agency tools. The "Build from" radio's key includes the number of options, so it switches to the strategy report once one exists instead of keeping the "Paste" choice from earlier reruns.
+
 ## Stage 5: legal and compliance groundwork (not addressed)
 
 This is a known, named gap, not an unconsidered one. A real version of this tool, taking payment from real agencies, would need at minimum:

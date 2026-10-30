@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT))
 
 import strategy_report  # noqa: E402
 
-FIXTURE = (ROOT / "tests" / "fixtures" / "rush_me_report.json").read_text()
+FIXTURE = (ROOT / "tests" / "fixtures" / "advisor_report.json").read_text()
 
 
 def test_parse_normalizes_loose_fields():
@@ -28,7 +28,7 @@ def test_truncated_response_is_salvaged():
     # Cut the fixture off mid-string inside actions_30_day, like a max_tokens stop.
     cut = FIXTURE[: FIXTURE.index("Publish your second content series") + 10]
     report = strategy_report.parse_report(cut, truncated=True)
-    assert report["business_name"] == "Rush Me Financial"
+    assert report["business_name"] == "Maple Advisory Group"
     assert len(report["insights"]) == 4
     # The step being written when the cut happened keeps its complete fields.
     assert len(report["actions_30_day"]) == 4
@@ -68,9 +68,9 @@ def test_html_has_all_six_sections_and_escapes():
                     "04 &mdash; LinkedIn hashtags", "05 &mdash; Immediate actions", "06 &mdash; To sharpen this further"]:
         assert heading in page
     assert "Four things that change your approach" in page
-    assert "Built from your brief &middot; Rush Me Financial" in page
+    assert "Built from your brief &middot; Maple Advisory Group" in page
     transcript_page = strategy_report.report_to_html(strategy_report.normalize_report(data), source_type="transcript")
-    assert "Built from your discovery call &middot; Rush Me Financial" in transcript_page
+    assert "Built from your discovery call &middot; Maple Advisory Group" in transcript_page
     assert "<script>" not in page
 
 
@@ -82,8 +82,8 @@ def test_markdown_lists_every_channel():
 
 
 def test_prompt_contains_source_and_business():
-    prompt = strategy_report.build_report_prompt("Some transcript text", "Rush Me Financial")
-    assert "Rush Me Financial" in prompt and "Some transcript text" in prompt
+    prompt = strategy_report.build_report_prompt("Some transcript text", "Maple Advisory Group")
+    assert "Maple Advisory Group" in prompt and "Some transcript text" in prompt
     assert '"validation_questions"' in prompt
     assert "free text" in prompt
     transcript_prompt = strategy_report.build_report_prompt("Some transcript text", "", "transcript")
@@ -125,12 +125,12 @@ def test_app_tab_renders_report_with_stubbed_claude():
     )
     at.run()
     transcript = "We are a two-person bookkeeping firm for incorporated contractors in Ontario."
-    at.text_input(key="report_business").input("Rush Me Financial")
+    at.text_input(key="report_business").input("Maple Advisory Group")
     at.text_area(key="report_text").input(transcript)
     next(b for b in at.button if b.label == "Build strategy report").click().run()
     assert not at.exception
     headers = [h.value for h in at.header] + [s.value for s in at.subheader]
-    assert "Audience & Channel Strategy: Rush Me Financial" in headers
+    assert "Audience & Channel Strategy: Maple Advisory Group" in headers
     for section in ["01 Target audience", "02 Strategic insights", "03 Channel plan", "04 LinkedIn hashtags", "05 Next 30 days", "06 To sharpen this further"]:
         assert section in headers
     assert not at.warning or all("Expected" not in w.value for w in at.warning)

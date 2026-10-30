@@ -1,14 +1,14 @@
 # Databite Audience Toolkit
 
-Audience schema extraction for ad briefs, and client-ready Audience & Channel Strategy reports for small businesses.
+Client-ready Audience & Channel Strategy reports and channel launch kits for small businesses, plus audience schema extraction for ad agencies.
 
 **Live demo:** https://audience-brief-parser-4dwtsrouwolbwzqdqsa6sb.streamlit.app/
 
 A Streamlit app with three tabs:
 
-- **Single brief:** converts a loosely written ad campaign brief into a structured, validated target audience description (so it can be handed to a data or ML team to query against first-party and third-party data), plus strategic insights and validation questions.
-- **Batch mode:** runs the same extraction over a CSV of up to 50 briefs.
-- **Strategy report:** turns free text or a call transcript about a business into a client-ready, six-section Audience & Channel Strategy you can download as HTML or Markdown.
+- **Strategy report:** turns free text or a call transcript about a business into a client-ready, six-section Audience & Channel Strategy, with real dates and a success measure for every step, that you can download as HTML or Markdown.
+- **Launch kit:** turns one channel from that strategy into everything needed to launch it: ready-to-paste posts, ad and lead form copy with qualifying questions, targeting, budget, reply scripts and a dated checklist.
+- **For agencies:** two tools for ad agencies. **Single brief** converts a loosely written ad campaign brief into a structured, validated target audience description (so it can be handed to a data or ML team to query against first-party and third-party data), plus strategic insights and validation questions. **Batch mode** runs the same extraction over a CSV of up to 50 briefs.
 
 ## Run it locally (Mac)
 
@@ -57,9 +57,9 @@ The tests cover the strategy report's prompt, validation and rendering (`strateg
 
 The app answers two related questions, one for each kind of user.
 
-**"What would a data team actually query?"** (Single brief and Batch mode tabs.) An ad brief typically describes a target audience in plain human language, for example "environmentally conscious millennials with disposable income." That description isn't queryable against a real data system. A data team needs actual field values that match a defined schema. This tool does that translation and, critically, validates the AI's output against a fixed set of allowed values, so it never silently hands downstream systems a value that doesn't exist in the real data dictionary.
+**"What would a data team actually query?"** (Single brief and Batch mode, under For agencies.) An ad brief typically describes a target audience in plain human language, for example "environmentally conscious millennials with disposable income." That description isn't queryable against a real data system. A data team needs actual field values that match a defined schema. This tool does that translation and, critically, validates the AI's output against a fixed set of allowed values, so it never silently hands downstream systems a value that doesn't exist in the real data dictionary.
 
-**"Who is my best customer, and where and how do I reach them?"** (Strategy report tab.) A small business owner usually can't answer that from a schema. They need a plain-language plan they can act on this month. The Strategy report turns what they say about their business, in notes or on a discovery call, into a client-ready Audience & Channel Strategy: who to target, which channels to use first, and what to do in the next 30 days. See [Strategy report](#strategy-report) below.
+**"Who is my best customer, and where and how do I reach them?"** (Strategy report tab.) A small business owner usually can't answer that from a schema. They need a plain-language plan they can act on this month. The Strategy report turns what they say about their business, in notes or on a discovery call, into a client-ready Audience & Channel Strategy: who to target, which channels to use first, and what to do in the next 30 days. The Launch kit then turns one channel into copy and steps the owner can follow without another meeting. See [Strategy report](#strategy-report) and [Launch kit](#launch-kit) below.
 
 ## What it does
 
@@ -100,22 +100,39 @@ Upload a CSV with a `brief_text` column (up to 50 rows) to process multiple brie
 
 The "Strategy report" tab turns free text about a business into a client-ready Audience & Channel Strategy, the same format as the one-pager Databite delivered by hand to its first pilot client.
 
-**Input.** Pick the input type ("Free text (description, notes or brief)" or "Call transcript"), optionally enter the business name, then paste the text or upload a .txt file. Input must be 50 to 40,000 characters, enough for a roughly 45 minute call transcript.
+**Input.** Pick the input type ("Free text (description, notes or brief)" or "Call transcript"), optionally enter the business name, then paste the text or upload a .txt file. Input must be 50 to 40,000 characters, enough for a roughly 45 minute call transcript. Set the plan start date (defaults to today) and, optionally, key dates or deadlines such as a festival or a busy season; the plan uses real calendar dates and times steps around them.
 
 **Output.** Six sections:
 
 1. **Target audience:** six profile cards (core profile, sharpest segment, why they hire you, what makes them switch, how they find a new provider, where they live online) plus audience tags.
 2. **Strategic insights:** exactly four, each ending in one concrete action.
-3. **Channel plan:** channel, priority (primary, secondary, later), what to do, budget and expected outcome.
+3. **Channel plan:** channel, priority (primary, secondary, later), what to do, budget, expected outcome and a success measure (a number, a check-in date and what to do if it's missed).
 4. **Hashtags:** grouped tags for the most important content platform plus suggested combos per post type, at most five tags per post.
-5. **Next 30 days:** week-by-week actions.
+5. **Next 30 days:** dated actions, each with how to know it's done or working.
 6. **Open questions:** validation questions, each with why it matters.
 
 **Download.** As a print-ready HTML page (open it and print to PDF for the client) or as Markdown.
 
 **Cost and limits.** One report is estimated at about $0.25 against the session cap. The response is allowed up to 16,000 output tokens so long reports aren't cut off; if one is still cut off, the app shows the sections that arrived, flags what's missing and warns you, instead of failing silently.
 
+The prompt doesn't assume customers will refer or reply just because they're asked. Referral advice is based on how the owner says new clients arrive today, and any new ask is framed as a test with a success measure.
+
 Prompt, validation and rendering live in `strategy_report.py`, which has no Streamlit dependency so it can be unit tested.
+
+## Launch kit
+
+The "Launch kit" tab builds from the strategy report made in the same session (pick one of its channels) or from a pasted strategy, notes or transcript (name the channel). Set the launch start date, an optional ad budget, key dates and any notes, such as who counts as a qualified lead.
+
+**Output:**
+
+- **Goal and qualified lead:** what the launch should achieve, and the criteria a person must meet to be worth an appointment.
+- **Checklist:** 8 to 15 dated steps, each with how to know it's done, plus success measures with targets and check-in dates.
+- **Posts:** 8 to 12 ready-to-paste posts, each ending in a call to action.
+- **Ads and lead form** (only when the channel has a budget): 2 to 3 ad variations, and a lead form whose qualifying questions say which answers make a qualified lead, to screen out fake or unqualified leads.
+- **Targeting and budget:** platform settings to enter, total and daily budget, schedule and a stop rule.
+- **Reply scripts:** what to send when someone responds, aimed at booking a call within 24 hours.
+
+Download it as print-ready HTML or Markdown. One kit is estimated at about $0.20 against the session cap and is logged as a `launch_kit` event. The code is in `launch_kit.py`, tested in `tests/test_launch_kit.py`.
 
 ## Audience persona generator (Premium feature)
 

@@ -1,0 +1,39 @@
+{
+  "business_name": "Maple Advisory Group",
+  "channel": "LinkedIn",
+  "goal": "Book 3 appointments with incorporated owners or established professionals from LinkedIn by Jan 31.",
+  "qualified_lead": "A Canadian resident of 10+ years, household income $100K+ or owns a corporation, who books and attends a call.",
+  "posts": [
+    {"date": "Dec 1", "title": "Salary or dividends?", "copy": "Most incorporated owners I meet pay themselves the same way every year.\n\nHere is why that can cost you [amount] in tax...", "call_to_action": "Message me SALARY and I'll send you the one-page checklist."},
+    {"date": "Dec 4", "title": "RRSP season myth", "copy": "\"I'll top up my RRSP in February.\" Here's what waiting can cost.", "call_to_action": "Comment RRSP and I'll message you the calendar."}
+  ],
+  "ads": [
+    {"name": "Incorporated owners A", "audience": "Business owners, Ontario, company size 1-10", "headline": "Salary or dividends? Get it right this year", "primary_text": "A 20-minute review of how you pay yourself.", "cta_button": "Sign up"}
+  ],
+  "lead_form": {
+    "headline": "Book a 20-minute pay-yourself review",
+    "intro": "Answer three quick questions so we can prepare.",
+    "questions": [
+      {"question": "Do you own a corporation?", "answers": ["Yes", "No, but planning to", "No"], "qualifies_if": "Yes or planning to"},
+      {"question": "How long have you lived in Canada?", "answers": ["Under 5 years", "5-10 years", "10+ years"], "qualifies_if": "10+ years"}
+    ],
+    "privacy_note": "We only use your details to contact you about this review.",
+    "thank_you": "Thanks! We will call you within one business day to book a time."
+  },
+  "targeting": [
+    {"setting": "Location", "value": "Ontario, Canada"},
+    {"setting": "Job titles", "value": "Owner, Founder, Principal, President"}
+  ],
+  "budget": {"total": "$400 for December", "daily": "$13/day", "schedule": "Dec 1-31, weekdays", "stop_rule": "Pause if no qualified lead after $200 spend."},
+  "reply_scripts": [
+    {"situation": "Someone messages SALARY", "message": "Thanks for reaching out! Here's the checklist. Would a 20-minute call this week help?"}
+  ],
+  "checklist": [
+    {"date": "Nov 28", "step": "Create a LinkedIn Campaign Manager account and add a payment method.", "done_when": "Account shows 'Active'."},
+    {"date": "Dec 1", "step": "Publish post 1 and launch Ad A with the lead form.", "done_when": "Post live and ad approved."}
+  ],
+  "success_measures": [
+    {"metric": "Qualified leads", "target": "5", "check_on": "Dec 31"},
+    {"metric": "Booked appointments", "target": "3", "check_on": "Jan 31"}
+  ]
+}
