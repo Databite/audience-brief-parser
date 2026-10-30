@@ -16,11 +16,11 @@
     {"title": "Your WhatsApp group is high-intent: design for DMs, not consumption", "body": "Members who join a financial WhatsApp group are already warm. The goal isn't to educate; it's to make people raise their hand.", "action": "End every broadcast with a low-friction prompt: \"Reply if this applies to you\" or \"DM me, I'll walk you through the numbers.\""}
   ],
   "channel_plan": [
-    {"channel": "LinkedIn", "priority": "primary", "what_to_do": "2-3 posts/week: tax tips for incorporated owners, FHSA/RRSP myth-busting, anonymized case studies", "budget": "Organic, no ad budget needed", "expected_outcome": "Inbound DMs from professionals; establishes expert positioning"},
-    {"channel": "WhatsApp Group", "priority": "primary", "what_to_do": "1-2 broadcasts/week ending with a specific CTA. Follow up every reply within 24 hrs", "budget": "Zero cost", "expected_outcome": "2-4 qualified DMs per month from warm audience"},
-    {"channel": "Referral Engine", "priority": "Primary", "what_to_do": "Add one referral ask to birthday portfolio snapshot. Track referrals in a simple sheet", "budget": "Zero cost", "expected_outcome": "1-2 referred intros per quarter per active referrer"},
-    {"channel": "Instagram", "priority": "secondary", "what_to_do": "Repurpose LinkedIn content as Reels or carousels. Lighter cadence (1x/week)", "budget": "No separate budget", "expected_outcome": "Brand awareness with younger segment; secondary priority"},
-    {"channel": "Paid Ads (Google/Meta)", "priority": "later", "what_to_do": "Only once organic content is converting. Test a $300/mo budget on LinkedIn Lead Gen forms targeting incorporated professionals", "budget": "$300-500/mo to test", "expected_outcome": "Predictable lead flow once message is proven organically"}
+    {"channel": "LinkedIn", "priority": "primary", "what_to_do": "2-3 posts/week: tax tips for incorporated owners, FHSA/RRSP myth-busting, anonymized case studies", "budget": "Organic, no ad budget needed", "expected_outcome": "Inbound DMs from professionals; establishes expert positioning", "success_measure": "10 inbound DMs by day 30; under 3, change the post topics"},
+    {"channel": "WhatsApp Group", "priority": "primary", "what_to_do": "1-2 broadcasts/week ending with a specific CTA. Follow up every reply within 24 hrs", "budget": "Zero cost", "expected_outcome": "2-4 qualified DMs per month from warm audience", "success_measure": "20 one-line replies by day 30; under 5, change the prompt"},
+    {"channel": "Referral Engine", "priority": "Primary", "what_to_do": "Add one referral ask to birthday portfolio snapshot. Track referrals in a simple sheet", "budget": "Zero cost", "expected_outcome": "1-2 referred intros per quarter per active referrer", "success_measure": "2 referrals by day 60; none, drop the ask"},
+    {"channel": "Instagram", "priority": "secondary", "what_to_do": "Repurpose LinkedIn content as Reels or carousels. Lighter cadence (1x/week)", "budget": "No separate budget", "expected_outcome": "Brand awareness with younger segment; secondary priority", "success_measure": "1 DM per week by day 45"},
+    {"channel": "Paid Ads (Google/Meta)", "priority": "later", "what_to_do": "Only once organic content is converting. Test a $300/mo budget on LinkedIn Lead Gen forms targeting incorporated professionals", "budget": "$300-500/mo to test", "expected_outcome": "Predictable lead flow once message is proven organically", "success_measure": "Leads that pass the qualifying questions under $60 each by day 30"}
   ],
   "hashtags": {
     "platform": "LinkedIn",
@@ -39,7 +39,7 @@
     ]
   },
   "actions_30_day": [
-    {"timeframe": "Week 1", "title": "LinkedIn audit + first post", "detail": "Update your LinkedIn headline to call out incorporated small business owners specifically. Publish your first post: \"3 tax mistakes incorporated owners make with their investments\"."},
+    {"timeframe": "Week 1", "title": "LinkedIn audit + first post", "detail": "Update your LinkedIn headline to call out incorporated small business owners specifically. Publish your first post: \"3 tax mistakes incorporated owners make with their investments\".", "success_measure": "Headline updated and first post live"},
     {"timeframe": "Week 1-2", "title": "Systematize the birthday referral ask", "detail": "Add one referral line to your existing birthday snapshot template. Build a simple tracker (a Google Sheet works): Name, Date sent, Referral asked Y/N, Referral received."},
     {"timeframe": "Week 2", "title": "WhatsApp broadcast redesign", "detail": "Rewrite your next three WhatsApp messages to end with a specific prompt instead of pure information. Note which ones get replies; repeat the format that works."},
     {"timeframe": "Week 3-4", "title": "Publish your second content series", "detail": "Based on what got engagement in weeks 1-2, double down on the angle that landed."}

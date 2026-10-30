@@ -8,6 +8,7 @@ import datetime
 import re
 import gspread
 import strategy_report
+import launch_kit
 from google.oauth2.service_account import Credentials
 
 st.set_page_config(
@@ -366,26 +367,35 @@ def remaining_budget():
     return max(0.0, current_cost_cap() - st.session_state.total_cost)
 
 st.title("Databite Audience Toolkit")
-st.write("Audience schema extraction for ad briefs, and client-ready Audience & Channel Strategy reports for small businesses.")
+st.write("Client-ready Audience & Channel Strategy reports and channel launch kits for small businesses, plus audience schema extraction for ad agencies.")
 
 with st.expander("How does this actually work? (for the curious)"):
     st.markdown("""
+**The Strategy report tab:** Paste notes or a call transcript about a business, and it writes a six-section Audience & Channel Strategy: who to target, which channels to use first, and what to do in the next 30 days, with real dates and a success measure for every step.
+
+**The Launch kit tab:** Pick one channel from the strategy, and it writes everything needed to launch it: ready-to-paste posts, ad copy, a lead form with questions that screen out unqualified leads, targeting, budget, reply scripts and a dated checklist.
+
+**For agencies:** The tools below are for ad agencies turning a client's brief into a request a data team can query.
+
 **The problem this solves:** Marketers write audience descriptions in plain language, like "environmentally conscious millennials with disposable income." That's not something a data system can search for directly, it needs specific, predefined field values instead.
 
 **What this tool does:** Paste in a plain-language ad brief, and it converts that description into a structured set of fields with real values, things like an age range, an income bracket, and a list of interests, all pulled from a real industry-standard vocabulary rather than made up on the spot. It also generates strategic recommendations specific to the brief.
 
 **Why two categories, "1st-party" and "3rd-party":** Some information (like whether someone already bought from your company before) would come from your own customer records. Other information (like their age range or interests) would typically be purchased from an outside data provider. This tool sorts the results into those two groups, since in a real setting each group is looked up in a completely different place.
 
-**The Strategy report tab:** Paste notes or a call transcript about a business, and it writes a six-section Audience & Channel Strategy: who to target, which channels to use first, and what to do in the next 30 days.
-
 **What it doesn't do:** It doesn't actually connect to any real customer database or purchase real audience data, it only produces the structured request you'd hand off to whoever manages those systems.
 """)
 
 st.warning("This is a public prototype with no privacy policy or data handling agreement in place. Please do not paste real client names, real campaign details, or any other confidential or sensitive information. Use a fictional or sample brief instead.")
-st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. This is a prototype, not a validated production tool, always sanity-check the output before using it for real targeting decisions.")
+st.caption("This is a prototype, not a validated production tool, always sanity-check the output before using it with a client.")
 st.caption(f"Session usage cap ({st.session_state.user_plan}): \\${current_cost_cap():.2f}. Used so far: \\${st.session_state.total_cost:.5f}. Remaining: \\${remaining_budget():.5f}.")
 
-tab1, tab2, tab3 = st.tabs(["Single brief", "Batch mode", "Strategy report"])
+report_tab, kit_tab, agency_tab = st.tabs(["Strategy report", "Launch kit", "For agencies"])
+
+with agency_tab:
+    st.write("Audience schema extraction for ad agencies: turn a plain-language ad brief into fields a data team can query.")
+    st.caption(f"Briefs must be between {MIN_BRIEF_LENGTH} and {MAX_BRIEF_LENGTH} characters. Always sanity-check the output before using it for real targeting decisions.")
+    tab1, tab2 = st.tabs(["Single brief", "Batch mode"])
 
 with tab1:
     brief_input = st.text_area("Ad brief", height=150)
@@ -721,14 +731,17 @@ with tab2:
                     "text/csv"
                 )
 
-with tab3:
-    st.write("Turn anything you know about a business (a free-text description, notes, a brief or a call transcript) into a client-ready Audience & Channel Strategy: target audience, four strategic insights, a channel plan, hashtags, 30-day actions and open questions.")
+with report_tab:
+    st.write("Turn anything you know about a business (a free-text description, notes, a brief or a call transcript) into a client-ready Audience & Channel Strategy: target audience, four strategic insights, a channel plan, hashtags, dated 30-day actions and open questions.")
     st.caption(f"Paste between {strategy_report.MIN_SOURCE_LENGTH:,} and {strategy_report.MAX_SOURCE_LENGTH:,} characters, or upload a .txt file. The more detail you give, the more specific the report. One report costs roughly \\${strategy_report.ESTIMATED_COST_PER_REPORT:.2f}.")
     report_business = st.text_input("Business name (optional)", key="report_business")
     report_source_label = st.radio("What are you pasting?", list(strategy_report.SOURCE_TYPES), horizontal=True, key="report_source_type")
     report_source_type = strategy_report.SOURCE_TYPES[report_source_label]
     report_text = st.text_area("Describe the business, or paste notes, a brief or a transcript", height=200, key="report_text")
     report_file = st.file_uploader("Or upload a .txt file", type=["txt"], key="report_file")
+    date_cols = st.columns(2)
+    report_start = date_cols[0].date_input("Plan start date", value=datetime.date.today(), key="report_start")
+    report_key_dates = date_cols[1].text_input("Key dates or deadlines (optional)", placeholder="e.g. Diwali Nov 8; investment season Dec-Feb", key="report_key_dates")
 
     if st.button("Build strategy report"):
         source = report_file.getvalue().decode("utf-8", errors="replace") if report_file is not None else report_text
@@ -740,7 +753,7 @@ with tab3:
                 st.warning(error_message)
             else:
                 with st.spinner("Building the strategy report with Claude..."):
-                    prompt = strategy_report.build_report_prompt(source, report_business, report_source_type)
+                    prompt = strategy_report.build_report_prompt(source, report_business, report_source_type, report_start, report_key_dates)
                     result_text, cost, truncated, api_error = call_claude(prompt, strategy_report.REPORT_MAX_TOKENS)
                 if api_error:
                     st.error(api_error)
@@ -789,8 +802,8 @@ with tab3:
 
         st.subheader("03 Channel plan")
         st.table(pd.DataFrame(
-            [(r.get("channel", ""), r["priority"].upper(), r.get("what_to_do", ""), r.get("budget", ""), r.get("expected_outcome", "")) for r in report["channel_plan"]],
-            columns=["Channel", "Priority", "What to do", "Budget", "Expected outcome"]
+            [(r.get("channel", ""), r["priority"].upper(), r.get("what_to_do", ""), r.get("budget", ""), r.get("expected_outcome", ""), r.get("success_measure", "")) for r in report["channel_plan"]],
+            columns=["Channel", "Priority", "What to do", "Budget", "Expected outcome", "Success measure"]
         ))
 
         hashtags = report["hashtags"]
@@ -805,7 +818,8 @@ with tab3:
 
         st.subheader("05 Next 30 days")
         for step in report["actions_30_day"]:
-            st.markdown(f"→ **{step.get('timeframe', '')}: {step.get('title', '')}**  \n{step.get('detail', '')}")
+            measure = f"  \n*Success: {step['success_measure']}*" if step.get("success_measure") else ""
+            st.markdown(f"→ **{step.get('timeframe', '')}: {step.get('title', '')}**  \n{step.get('detail', '')}{measure}")
 
         st.subheader("06 To sharpen this further")
         for i, q in enumerate(report["validation_questions"], 1):
@@ -827,3 +841,124 @@ with tab3:
             "text/markdown"
         )
         st.caption(f"This report cost approximately \\${st.session_state.get('last_report_cost', 0.0):.5f}")
+
+with kit_tab:
+    st.write("Turn one channel from a strategy into everything needed to launch it: ready-to-paste posts, ad copy, a lead form with qualifying questions, targeting, budget, reply scripts and a dated checklist with success measures.")
+    st.caption(f"One launch kit costs roughly \\${launch_kit.ESTIMATED_COST_PER_KIT:.2f}.")
+    kit_report = st.session_state.get("last_report")
+    kit_source_options = (["The strategy report from the Strategy report tab"] if kit_report else []) + ["Paste a strategy or notes"]
+    # The key changes once a report exists, so the radio defaults to it instead of keeping "Paste" from earlier runs.
+    kit_source = st.radio("Build from", kit_source_options, horizontal=True, key=f"kit_source_{len(kit_source_options)}")
+    use_report = kit_report is not None and kit_source == kit_source_options[0]
+    if use_report:
+        kit_business = kit_report["business_name"]
+        channel_options = [r.get("channel", "") for r in kit_report["channel_plan"] if r.get("channel")] + ["Other"]
+        kit_channel = st.selectbox("Channel to launch", channel_options, key="kit_channel_pick")
+        if kit_channel == "Other":
+            kit_channel = st.text_input("Channel name", key="kit_channel_other")
+    else:
+        kit_business = st.text_input("Business name (optional)", key="kit_business")
+        kit_channel = st.text_input("Channel to launch", placeholder="e.g. LinkedIn, WhatsApp group, Instagram", key="kit_channel_text")
+        kit_text = st.text_area("Paste the strategy, notes or a call transcript", height=200, key="kit_text")
+    kit_cols = st.columns(2)
+    kit_start = kit_cols[0].date_input("Launch start date", value=datetime.date.today(), key="kit_start")
+    kit_budget = kit_cols[1].text_input("Ad budget (optional)", placeholder="e.g. $300-500/month", key="kit_budget")
+    kit_key_dates = st.text_input("Key dates or deadlines (optional)", placeholder="e.g. travelling in November; investment season Dec-Feb", key="kit_key_dates")
+    kit_notes = st.text_area("Anything else? (optional)", placeholder="e.g. who counts as a qualified lead, what has already been tried", height=80, key="kit_notes")
+
+    if st.button("Build launch kit"):
+        context = strategy_report.report_to_markdown(kit_report) if use_report else kit_text
+        if remaining_budget() < launch_kit.ESTIMATED_COST_PER_KIT:
+            st.error(f"A launch kit needs about \\${launch_kit.ESTIMATED_COST_PER_KIT:.2f} and this session has \\${remaining_budget():.4f} left. Please start a new session to continue.")
+        elif not kit_channel.strip():
+            st.warning("Please name the channel to launch.")
+        else:
+            is_valid, error_message = strategy_report.validate_source_input(context)
+            if not is_valid:
+                st.warning(error_message)
+            else:
+                with st.spinner("Building the launch kit with Claude..."):
+                    prompt = launch_kit.build_kit_prompt(context, kit_channel, kit_business, kit_start, kit_key_dates, kit_budget, kit_notes)
+                    result_text, cost, truncated, api_error = call_claude(prompt, launch_kit.KIT_MAX_TOKENS)
+                if api_error:
+                    st.error(api_error)
+                    log_event("launch_kit", 0.0, False)
+                else:
+                    st.session_state.total_cost += cost
+                    st.session_state.last_kit_cost = cost
+                    if truncated:
+                        st.warning("Claude's response was cut off before it finished. The sections that arrived are shown below; anything missing is flagged. Try again for a complete kit.")
+                    try:
+                        st.session_state.last_kit = launch_kit.parse_kit(result_text, truncated=truncated)
+                        st.session_state.last_kit["channel"] = st.session_state.last_kit["channel"] or kit_channel
+                        log_event("launch_kit", cost, True)
+                    except (json.JSONDecodeError, ValueError):
+                        st.session_state.last_kit = None
+                        st.error("Claude did not return a valid launch kit. Raw response below.")
+                        st.text(result_text)
+                        log_event("launch_kit", cost, False)
+
+    # Rendered from session_state so the kit survives download-button reruns.
+    kit = st.session_state.get("last_kit")
+    if kit:
+        for issue in launch_kit.validate_kit(kit):
+            st.warning(issue)
+        st.header(launch_kit.kit_title(kit))
+        if kit["goal"]:
+            st.markdown(f"**Goal:** {kit['goal']}")
+        if kit["qualified_lead"]:
+            st.markdown(f"**A qualified lead is:** {kit['qualified_lead']}")
+
+        st.subheader("Checklist")
+        for item in kit["checklist"]:
+            st.markdown(f"☐ **{item.get('date', '')}:** {item.get('step', '')}  \n*Done when: {item.get('done_when', '')}*")
+        if kit["success_measures"]:
+            st.table(pd.DataFrame([(m.get("metric", ""), m.get("target", ""), m.get("check_on", "")) for m in kit["success_measures"]],
+                                  columns=["Success measure", "Target", "Check on"]))
+
+        st.subheader("Posts")
+        for post in kit["posts"]:
+            with st.container(border=True):
+                st.caption(post.get("date", "").upper())
+                st.markdown(f"**{post.get('title', '')}**")
+                st.text(post.get("copy", ""))
+                st.markdown(f"**{post.get('call_to_action', '')}**")
+
+        if kit["ads"]:
+            st.subheader("Ads")
+            st.table(pd.DataFrame([(a.get("name", ""), a.get("audience", ""), a.get("headline", ""), a.get("primary_text", ""), a.get("cta_button", "")) for a in kit["ads"]],
+                                  columns=["Ad", "Audience", "Headline", "Text", "Button"]))
+        form = kit["lead_form"]
+        if form["questions"]:
+            st.subheader("Lead form")
+            st.markdown(f"**{form['headline']}** {form['intro']}")
+            for i, q in enumerate(form["questions"], 1):
+                st.markdown(f"{i}. {q.get('question', '')} ({' / '.join(q['answers'])})  \n*Qualifies if: {q.get('qualifies_if', '')}*")
+            st.caption(f"Privacy: {form['privacy_note']}  \nThank-you screen: {form['thank_you']}")
+        if kit["targeting"] or any(kit["budget"].values()):
+            st.subheader("Targeting and budget")
+            rows = [(t.get("setting", ""), t.get("value", "")) for t in kit["targeting"]]
+            rows += [(label, kit["budget"][field]) for field, label in (("total", "Total budget"), ("daily", "Daily budget"), ("schedule", "Schedule"), ("stop_rule", "Stop rule")) if kit["budget"][field]]
+            st.table(pd.DataFrame(rows, columns=["Setting", "Value"]))
+        if kit["reply_scripts"]:
+            st.subheader("Reply scripts")
+            for r in kit["reply_scripts"]:
+                st.markdown(f"**{r.get('situation', '')}**")
+                st.text(r.get("message", ""))
+
+        st.divider()
+        kit_stem = re.sub(r"[^A-Za-z0-9]+", "-", f"{kit['business_name']} {kit['channel']}").strip("-").lower() or "client"
+        st.download_button(
+            "Download launch kit (HTML, print to PDF)",
+            launch_kit.kit_to_html(kit, month_label=datetime.date.today().strftime("%B %Y")),
+            f"{kit_stem}-launch-kit.html",
+            "text/html"
+        )
+        st.download_button(
+            "Download as Markdown",
+            launch_kit.kit_to_markdown(kit),
+            f"{kit_stem}-launch-kit.md",
+            "text/markdown",
+            key="kit_markdown_download"
+        )
+        st.caption(f"This launch kit cost approximately \\${st.session_state.get('last_kit_cost', 0.0):.5f}")

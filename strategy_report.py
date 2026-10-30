@@ -8,9 +8,10 @@ delivered to its first pilot client by hand:
 
     01 Target audience     six profile cards plus audience tags
     02 Strategic insights  exactly four, each ending in one concrete action
-    03 Channel plan        channel, priority, what to do, budget, outcome
+    03 Channel plan        channel, priority, what to do, budget, outcome,
+                           success measure
     04 Hashtags            grouped tags plus suggested combos per post type
-    05 Next 30 days        week-by-week actions
+    05 Next 30 days        dated actions, each with a success measure
     06 Open questions      validation questions, each with why it matters
 
 Kept free of Streamlit so it can be unit tested and reused by batch jobs.
@@ -60,7 +61,20 @@ def validate_source_input(text):
     return True, None
 
 
-def build_report_prompt(source_text, business_name="", source_type="free_text"):
+def plan_dates_line(start_date=None, key_dates=""):
+    """Prompt line that anchors the plan to real calendar dates. Shared with
+    the launch kit so both speak in the same dates."""
+    if start_date:
+        start = f"{start_date:%A}, {start_date:%B} {start_date.day}, {start_date.year}"
+        line = f"The plan starts on {start}. Use real calendar dates for every timeframe (e.g. \"Dec 1-7\"), never \"Week 1\"."
+    else:
+        line = "No start date was given, so use relative timeframes such as \"Week 1\"."
+    if key_dates.strip():
+        line += f" Key dates and deadlines the owner gave: {key_dates.strip()}. Time launches, offers and reviews around them and say which date a step is working toward."
+    return line
+
+
+def build_report_prompt(source_text, business_name="", source_type="free_text", start_date=None, key_dates=""):
     business_line = f"The business is called {business_name}." if business_name.strip() else "Infer the business's name from the text if it is stated; otherwise use an empty string."
     if source_type == "transcript":
         source_line = "The source is a discovery call transcript between a Databite analyst and the business owner. Base facts on what the business owner says; ignore filler, small talk and garbled or non-English transcription fragments."
@@ -68,7 +82,7 @@ def build_report_prompt(source_text, business_name="", source_type="free_text"):
         source_line = "The source is free text written by or about the business: a description, notes or a brief, possibly short. Where it is thin, make the most reasonable assumptions for this kind of business, phrase them as assumptions rather than facts, and aim the validation questions at the biggest gaps."
     return f"""You are a senior marketing strategist at Databite. Below is source material about one small business. {source_line} {business_line}
 
-Write an "Audience & Channel Strategy" for the owner. Address them directly as "you". Be specific to this business: name their real products, existing assets (newsletters, groups, birthday messages, apps, referral habits), customer segments, geography and deadlines exactly as they describe them. Never write advice that would fit any business in the category. Do not invent statistics about the business; anything you estimate must read as an estimate.
+Write an "Audience & Channel Strategy" for the owner. Address them directly as "you". {plan_dates_line(start_date, key_dates)} Be specific to this business: name their real products, existing assets (newsletters, groups, birthday messages, apps, referral habits), customer segments, geography and deadlines exactly as they describe them. Never write advice that would fit any business in the category. Do not invent statistics about the business; anything you estimate must read as an estimate.
 
 Sections to produce:
 
@@ -80,10 +94,10 @@ Sections to produce:
    - how_they_find_you: how customers find a new provider (referral, search, social, events), in order of importance.
    - where_they_live_online: which platforms and private channels (including WhatsApp, community groups, email) matter and what each is for.
 2. audience_tags: 6-10 short labels (1-4 words) summarising the audience, e.g. "Homeowners", "Dual-income households".
-3. insights: exactly {INSIGHT_COUNT} strategic insights, most important first. Each has a "title" (one punchy sentence, may use an em dash), a "body" (2-4 sentences explaining the reasoning, including what competitors get wrong where relevant) and an "action" (one sentence: the specific thing to do, e.g. an exact line of copy to add or a posting cadence). At least one insight should turn an asset the business already has into a lead or referral source.
-4. channel_plan: 4-6 rows ordered by priority. Each row: "channel" (a platform or a non-platform channel such as "Referral engine" or "Email newsletter"), "priority" (one of {CHANNEL_PRIORITIES}; "later" is for paid ads or anything that should wait until organic content converts), "what_to_do" (cadence and content, 1-2 sentences), "budget" (short, e.g. "Organic, no ad budget needed", "Zero cost", "$300-500/mo to test") and "expected_outcome" (one short sentence, framed as an estimate).
+3. insights: exactly {INSIGHT_COUNT} strategic insights, most important first. Each has a "title" (one punchy sentence, may use an em dash), a "body" (2-4 sentences explaining the reasoning, including what competitors get wrong where relevant) and an "action" (one sentence: the specific thing to do, e.g. an exact line of copy to add or a posting cadence). Use assets the business already has, but do not assume customers will refer or reply just because they are asked: base referral and engagement advice on how the owner says new clients actually arrive today (for example, give clients something easy to forward in a conversation they are already having), and frame any new ask as a test.
+4. channel_plan: 4-6 rows ordered by priority. Each row: "channel" (a platform or a non-platform channel such as "Referral engine" or "Email newsletter"), "priority" (one of {CHANNEL_PRIORITIES}; "later" is for paid ads or anything that should wait until organic content converts), "what_to_do" (cadence and content, 1-2 sentences), "budget" (short, e.g. "Organic, no ad budget needed", "Zero cost", "$300-500/mo to test"), "expected_outcome" (one short sentence, framed as an estimate) and "success_measure" (a number, a check-in date and what to do if it is missed, e.g. "10 DMs by Dec 31; under 3, drop it").
 5. hashtags: for the single most important content platform. "platform" (its name), "guidance" (1-2 sentences on how many tags per post and how to mix them, at most {MAX_TAGS_PER_POST} per post), "groups" (3-4 groups, each with "label" such as "High-volume", "purpose" such as "Broad reach", and "tags": 4-6 hashtags) and "combos" (3-4 suggested combinations, each with "post_type" naming a concrete post idea and "tags": 3-{MAX_TAGS_PER_POST} hashtags drawn from the groups). Include location-specific tags if the business is local or national. Every hashtag starts with "#" and has no spaces.
-6. actions_30_day: 3-5 steps for the next 30 days, in order. Each has "timeframe" (e.g. "Week 1", "Week 1-2", "Week 3-4"), "title" (a few words) and "detail" (1-2 sentences, concrete enough to do without another meeting, e.g. the exact first post title).
+6. actions_30_day: 3-5 steps for the next 30 days, in order. Each has "timeframe" (a date range, or "Week 1" style when there is no start date), "title" (a few words), "detail" (1-2 sentences, concrete enough to do without another meeting, e.g. the exact first post title) and "success_measure" (one short line: how the owner knows the step is done or working).
 7. validation_questions: exactly 3 questions whose answers would most change this strategy. Each has "question" and "why_it_matters" (one sentence on what each possible answer would mean for the plan).
 
 Keep it tight: every "body", "detail" and "why_it_matters" is at most 2-3 sentences, so the whole report fits on about four printed pages.
@@ -101,14 +115,14 @@ Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly
   }},
   "audience_tags": ["...", "..."],
   "insights": [{{"title": "...", "body": "...", "action": "..."}}],
-  "channel_plan": [{{"channel": "...", "priority": "primary", "what_to_do": "...", "budget": "...", "expected_outcome": "..."}}],
+  "channel_plan": [{{"channel": "...", "priority": "primary", "what_to_do": "...", "budget": "...", "expected_outcome": "...", "success_measure": "..."}}],
   "hashtags": {{
     "platform": "...",
     "guidance": "...",
     "groups": [{{"label": "...", "purpose": "...", "tags": ["#...", "#..."]}}],
     "combos": [{{"post_type": "...", "tags": ["#...", "#..."]}}]
   }},
-  "actions_30_day": [{{"timeframe": "...", "title": "...", "detail": "..."}}],
+  "actions_30_day": [{{"timeframe": "...", "title": "...", "detail": "...", "success_measure": "..."}}],
   "validation_questions": [{{"question": "...", "why_it_matters": "..."}}]
 }}
 
@@ -162,6 +176,8 @@ def validate_report(report):
     for row in report["channel_plan"]:
         if row["priority"] not in CHANNEL_PRIORITIES:
             issues.append(f"Channel '{row.get('channel', '?')}' has priority '{row['priority']}', expected one of {CHANNEL_PRIORITIES}.")
+        if not row.get("success_measure"):
+            issues.append(f"Channel '{row.get('channel', '?')}' has no success measure.")
     if not report["hashtags"]["groups"]:
         issues.append("No hashtag groups.")
     for combo in report["hashtags"]["combos"]:
@@ -242,9 +258,9 @@ def report_to_markdown(report):
     lines += ["## 02 Strategic insights", ""]
     for i, insight in enumerate(report["insights"], 1):
         lines.append(f"{i}. **{insight.get('title', '')}** {insight.get('body', '')} **{insight.get('action', '')}**")
-    lines += ["", "## 03 Channel plan", "", "| Channel | Priority | What to do | Budget | Expected outcome |", "|---|---|---|---|---|"]
+    lines += ["", "## 03 Channel plan", "", "| Channel | Priority | What to do | Budget | Expected outcome | Success measure |", "|---|---|---|---|---|---|"]
     for row in report["channel_plan"]:
-        cells = [row.get("channel", ""), row["priority"], row.get("what_to_do", ""), row.get("budget", ""), row.get("expected_outcome", "")]
+        cells = [row.get("channel", ""), row["priority"], row.get("what_to_do", ""), row.get("budget", ""), row.get("expected_outcome", ""), row.get("success_measure", "")]
         lines.append("| " + " | ".join(str(c).replace("|", "/") for c in cells) + " |")
     hashtags = report["hashtags"]
     lines += ["", f"## 04 {hashtags['platform']} hashtags".replace("  ", " "), "", hashtags["guidance"], ""]
@@ -256,7 +272,8 @@ def report_to_markdown(report):
             lines.append(f"- {combo.get('post_type', '')}: {' '.join(combo['tags'])}")
     lines += ["", "## 05 Next 30 days", ""]
     for step in report["actions_30_day"]:
-        lines.append(f"- **{step.get('timeframe', '')}: {step.get('title', '')}.** {step.get('detail', '')}")
+        measure = f" *Success: {step['success_measure']}*" if step.get("success_measure") else ""
+        lines.append(f"- **{step.get('timeframe', '')}: {step.get('title', '')}.** {step.get('detail', '')}{measure}")
     lines += ["", "## 06 To sharpen this further", ""]
     for i, q in enumerate(report["validation_questions"], 1):
         lines.append(f"{i}. **{q.get('question', '')}** {q.get('why_it_matters', '')}")
@@ -293,6 +310,7 @@ table { width:100%; border-collapse:collapse; font-size:13px; }
 th { text-align:left; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-weight:500; padding:8px 8px 8px 0; border-bottom:1px solid var(--ink); }
 td { vertical-align:top; padding:12px 8px 12px 0; border-bottom:1px solid var(--line); }
 .budget { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+.measure { display:block; font-size:12px; margin-top:4px; color:var(--accent); font-weight:500; }
 .badge { display:inline-block; font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; padding:2px 6px; margin-left:6px; background:var(--chip); color:var(--accent); }
 .badge.secondary { background:var(--amber); color:#7a5a00; }
 .badge.later { background:#f3e3d6; color:var(--warn); }
@@ -354,7 +372,8 @@ def report_to_html(report, month_label="", prepared_by="Databite", source_type="
         priority = row["priority"]
         badge = f"<span class='badge {e(priority)}'>{e(priority)}</span>" if priority else ""
         budget = f"<span class='budget'>{e(row.get('budget'))}</span>" if row.get("budget") else ""
-        parts.append(f"<tr><td style='width:24%'>{e(row.get('channel'))}{badge}</td><td>{e(row.get('what_to_do'))}{budget}</td><td style='width:28%'>{e(row.get('expected_outcome'))}</td></tr>")
+        measure = f"<span class='measure'>Success: {e(row.get('success_measure'))}</span>" if row.get("success_measure") else ""
+        parts.append(f"<tr><td style='width:24%'>{e(row.get('channel'))}{badge}</td><td>{e(row.get('what_to_do'))}{budget}</td><td style='width:28%'>{e(row.get('expected_outcome'))}{measure}</td></tr>")
     parts.append("</tbody></table>")
 
     hashtags = report["hashtags"]
@@ -374,7 +393,8 @@ def report_to_html(report, month_label="", prepared_by="Databite", source_type="
 
     parts += ["<div class='section-label'>05 &mdash; Immediate actions</div>", "<h2>What to do in the next 30 days</h2>"]
     for step in report["actions_30_day"]:
-        parts.append(f"<div class='action'><div><strong>{e(step.get('timeframe'))}: {e(step.get('title'))}</strong><p>{e(step.get('detail'))}</p></div></div>")
+        measure = f"<span class='measure'>Success: {e(step.get('success_measure'))}</span>" if step.get("success_measure") else ""
+        parts.append(f"<div class='action'><div><strong>{e(step.get('timeframe'))}: {e(step.get('title'))}</strong><p>{e(step.get('detail'))}</p>{measure}</div></div>")
 
     if report["validation_questions"]:
         parts += ["<div class='section-label'>06 &mdash; To sharpen this further</div>", "<div class='questions'><div class='eyebrow'>A few things that would make the next round even more targeted</div><ol>"]
