@@ -128,7 +128,7 @@ The "Launch kit" tab builds from the strategy report made in the same session (p
 - **Goal and qualified lead:** what the launch should achieve, and the criteria a person must meet to be worth an appointment.
 - **Checklist:** 8 to 15 dated steps, each with how to know it's done, plus success measures with targets and check-in dates.
 - **Posts:** 8 to 12 ready-to-paste posts, each ending in a call to action.
-- **Ads and lead form** (only when the channel has a budget): 2 to 3 ad variations, and a lead form whose qualifying questions say which answers make a qualified lead, to screen out fake or unqualified leads.
+- **Ads and lead form** (only when the channel has a budget): 2 to 3 ad variations, and a lead form whose qualifying questions say which answers make a qualified lead, to screen out fake or unqualified leads. The lead form section starts with "How it works": where to set the form up on the platform, what the prospect sees, where leads arrive and how to follow up, for owners who have never used lead forms.
 - **Targeting and budget:** platform settings to enter, total and daily budget, schedule and a stop rule.
 - **Reply scripts:** what to send when someone responds, aimed at booking a call within 24 hours.
 

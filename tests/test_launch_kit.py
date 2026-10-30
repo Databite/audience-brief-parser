@@ -27,6 +27,9 @@ def test_validate_flags_ads_without_qualifying_questions():
     data = json.loads(KIT_FIXTURE)
     data["lead_form"] = {}
     data["success_measures"] = []
+    data_no_steps = json.loads(KIT_FIXTURE)
+    data_no_steps["lead_form"]["how_it_works"] = []
+    assert "The lead form doesn't explain how it works on the platform." in launch_kit.validate_kit(launch_kit.normalize_kit(data_no_steps))
     issues = launch_kit.validate_kit(launch_kit.normalize_kit(data))
     assert any("no qualifying questions" in i for i in issues)
     assert "No success measures." in issues
@@ -53,16 +56,17 @@ def test_kit_renders_and_escapes():
     kit = launch_kit.normalize_kit(data)
     page = launch_kit.kit_to_html(kit, month_label="December 2026")
     assert "<script>" not in page
-    for text in ["Checklist", "Ready to paste", "Lead form", "Qualifies if: 10+ years", "Stop rule", "When someone responds"]:
+    for text in ["Checklist", "Ready to paste", "Lead form", "Qualifies if: 10+ years", "How the lead form works", "opens inside LinkedIn", "Stop rule", "When someone responds"]:
         assert text in page
     md = launch_kit.kit_to_markdown(kit)
+    assert "**How it works**" in md and "1. In LinkedIn Campaign Manager" in md
     assert "- [ ] **Dec 1:**" in md and "Qualifies if: Yes or planning to" in md
 
 
 def test_kit_prompt_carries_channel_dates_and_budget():
     prompt = launch_kit.build_kit_prompt("Strategy text", "LinkedIn", "Maple Advisory Group", datetime.date(2026, 12, 1),
                                          "investment season Dec-Feb", "$300-500/month", "travelling in November")
-    for text in ["LinkedIn", "Maple Advisory Group", "December 1, 2026", "investment season Dec-Feb", "$300-500/month", "travelling in November", "qualifies_if"]:
+    for text in ["LinkedIn", "Maple Advisory Group", "December 1, 2026", "investment season Dec-Feb", "$300-500/month", "travelling in November", "qualifies_if", "how_it_works"]:
         assert text in prompt
 
 
