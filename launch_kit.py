@@ -7,7 +7,8 @@ that are real people who meet their criteria. A launch kit takes one channel
 
     posts             dated, ready-to-paste posts with a call to action
     ads               ad copy, only when the channel has a paid budget
-    lead_form         qualifying questions that screen out unqualified leads
+    lead_form         qualifying questions that screen out unqualified leads,
+                      plus how the platform's form works, for owners new to it
     targeting         platform settings to enter
     budget            total, daily, schedule and a stop rule
     reply_scripts     what to send when someone responds
@@ -43,7 +44,7 @@ Sections to produce:
 2. qualified_lead: one sentence defining a qualified lead for this business (the criteria a person must meet to be worth an appointment).
 3. posts: 8-12 organic posts for this channel, in publishing order. Each has "date", "title" (a few words), "copy" (the full post, ready to paste, in the channel's normal length and format) and "call_to_action" (the exact last line, e.g. a keyword to message back). Mix formats the channel supports.
 4. ads: if this channel has an ad budget, 2-3 ad variations to test, each with "name", "audience" (which segment it targets), "headline", "primary_text" and "cta_button" (a button label the platform offers). Otherwise an empty list.
-5. lead_form: if there are ads, the lead form they point to: "headline", "intro" (1-2 sentences), "questions" (3-5 short multiple-choice qualifying questions, each with "question", "answers" (a list of choices) and "qualifies_if" (which answers make a qualified lead)), "privacy_note" (one line) and "thank_you" (what the person sees after submitting, including what happens next). The questions must screen out people who do not meet the qualified_lead criteria. Without ads, return an object with empty strings and an empty questions list.
+5. lead_form: if there are ads, the lead form they point to: "headline", "intro" (1-2 sentences), "questions" (3-5 short multiple-choice qualifying questions, each with "question", "answers" (a list of choices) and "qualifies_if" (which answers make a qualified lead)), "privacy_note" (one line) and "thank_you" (what the person sees after submitting, including what happens next) and "how_it_works" (4-5 plain-language steps, in order, for an owner who has never used this platform's lead forms: where to create the form and attach it to the ad (name the platform's own tool, e.g. LinkedIn Lead Gen Forms in Campaign Manager or Meta Instant Forms in Ads Manager), what the prospect sees when they click the ad button (the form opens on the platform, pre-filled from their profile, no website needed), where submitted leads arrive and how the owner is notified, and how to check answers against qualifies_if and reply within 24 hours using the reply scripts). The questions must screen out people who do not meet the qualified_lead criteria. Without ads, return an object with empty strings and an empty questions list.
 6. targeting: settings to enter on the platform, 4-8 rows of "setting" and "value" (e.g. location, job titles, company size, age, interests, exclusions). For an organic channel, describe who to connect with or which groups to join instead.
 7. budget: "total" (for the launch period), "daily", "schedule" (when ads run, around the owner's dates) and "stop_rule" (the result that means pause or change the ads). For an organic channel, use "No ad spend" and a stop rule for the posting effort.
 8. reply_scripts: 2-4 messages to send when someone responds (a DM, a comment, a form lead), each with "situation" and "message". Each moves a qualified person toward booking an appointment within 24 hours.
@@ -60,7 +61,7 @@ Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly
   "qualified_lead": "...",
   "posts": [{{"date": "...", "title": "...", "copy": "...", "call_to_action": "..."}}],
   "ads": [{{"name": "...", "audience": "...", "headline": "...", "primary_text": "...", "cta_button": "..."}}],
-  "lead_form": {{"headline": "...", "intro": "...", "questions": [{{"question": "...", "answers": ["...", "..."], "qualifies_if": "..."}}], "privacy_note": "...", "thank_you": "..."}},
+  "lead_form": {{"headline": "...", "intro": "...", "questions": [{{"question": "...", "answers": ["...", "..."], "qualifies_if": "..."}}], "privacy_note": "...", "thank_you": "...", "how_it_works": ["...", "..."]}},
   "targeting": [{{"setting": "...", "value": "..."}}],
   "budget": {{"total": "...", "daily": "...", "schedule": "...", "stop_rule": "..."}},
   "reply_scripts": [{{"situation": "...", "message": "..."}}],
@@ -90,6 +91,7 @@ def normalize_kit(kit):
     form = kit.get("lead_form") or {}
     kit["lead_form"] = {field: form.get(field) or "" for field in LEAD_FORM_FIELDS}
     kit["lead_form"]["questions"] = form.get("questions") or []
+    kit["lead_form"]["how_it_works"] = [str(step) for step in form.get("how_it_works") or []]
     for q in kit["lead_form"]["questions"]:
         q["answers"] = [str(a) for a in q.get("answers") or []]
     budget = kit.get("budget") or {}
@@ -104,6 +106,8 @@ def validate_kit(kit):
         issues.append("No posts.")
     if kit["ads"] and not kit["lead_form"]["questions"]:
         issues.append("Ads are included but the lead form has no qualifying questions.")
+    if kit["lead_form"]["questions"] and not kit["lead_form"]["how_it_works"]:
+        issues.append("The lead form doesn't explain how it works on the platform.")
     for q in kit["lead_form"]["questions"]:
         if not q.get("qualifies_if"):
             issues.append(f"Lead form question '{q.get('question', '?')}' doesn't say which answers qualify.")
@@ -160,7 +164,10 @@ def kit_to_markdown(kit):
                       f"- Text: {ad.get('primary_text', '')}", f"- Button: {ad.get('cta_button', '')}", ""]
     form = kit["lead_form"]
     if form["questions"]:
-        lines += ["## Lead form", "", f"**{form['headline']}** {form['intro']}", ""]
+        lines += ["## Lead form", ""]
+        if form["how_it_works"]:
+            lines += ["**How it works**", ""] + [f"{i}. {step}" for i, step in enumerate(form["how_it_works"], 1)] + ["", "**The form**", ""]
+        lines += [f"**{form['headline']}** {form['intro']}", ""]
         for i, q in enumerate(form["questions"], 1):
             lines.append(f"{i}. {q.get('question', '')} ({' / '.join(q['answers'])}). *Qualifies if: {q.get('qualifies_if', '')}*")
         lines += ["", f"Privacy: {form['privacy_note']}", "", f"Thank-you screen: {form['thank_you']}", ""]
@@ -236,7 +243,10 @@ def kit_to_html(kit, month_label="", prepared_by="Databite"):
         section += 1
     form = kit["lead_form"]
     if form["questions"]:
-        parts += [f"<div class='section-label'>0{section} &mdash; Lead form</div>", f"<h2>{e(form['headline']) or 'Lead form'}</h2>", f"<p>{e(form['intro'])}</p>",
+        parts += [f"<div class='section-label'>0{section} &mdash; Lead form</div>"]
+        if form["how_it_works"]:
+            parts += ["<h2>How the lead form works</h2><ol>"] + [f"<li>{e(step)}</li>" for step in form["how_it_works"]] + ["</ol>"]
+        parts += [f"<h2>{e(form['headline']) or 'Lead form'}</h2>", f"<p>{e(form['intro'])}</p>",
                   "<div class='questions'><div class='eyebrow'>Qualifying questions</div><ol>"]
         for q in form["questions"]:
             parts.append(f"<li>{e(q.get('question'))}<p>{e(' / '.join(q['answers']))}</p><p>Qualifies if: {e(q.get('qualifies_if'))}</p></li>")

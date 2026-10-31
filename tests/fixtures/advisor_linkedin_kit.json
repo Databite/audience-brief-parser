@@ -18,7 +18,13 @@
       {"question": "How long have you lived in Canada?", "answers": ["Under 5 years", "5-10 years", "10+ years"], "qualifies_if": "10+ years"}
     ],
     "privacy_note": "We only use your details to contact you about this review.",
-    "thank_you": "Thanks! We will call you within one business day to book a time."
+    "thank_you": "Thanks! We will call you within one business day to book a time.",
+    "how_it_works": [
+      "In LinkedIn Campaign Manager, create a Lead Gen Form with these questions and attach it to each ad.",
+      "When someone clicks the ad's Sign up button, the form opens inside LinkedIn, pre-filled from their profile. No website needed.",
+      "You get an email for each new lead; all leads are under Campaign Manager > Lead Gen Forms, where you can download them.",
+      "Check each lead's answers against 'Qualifies if' and send the reply script within 24 hours."
+    ]
   },
   "targeting": [
     {"setting": "Location", "value": "Ontario, Canada"},

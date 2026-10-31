@@ -931,6 +931,10 @@ with kit_tab:
         form = kit["lead_form"]
         if form["questions"]:
             st.subheader("Lead form")
+            if form["how_it_works"]:
+                st.markdown("**How it works**")
+                st.markdown("\n".join(f"{i}. {step}" for i, step in enumerate(form["how_it_works"], 1)))
+                st.markdown("**The form**")
             st.markdown(f"**{form['headline']}** {form['intro']}")
             for i, q in enumerate(form["questions"], 1):
                 st.markdown(f"{i}. {q.get('question', '')} ({' / '.join(q['answers'])})  \n*Qualifies if: {q.get('qualifies_if', '')}*")
