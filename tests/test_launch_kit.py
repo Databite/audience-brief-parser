@@ -66,6 +66,7 @@ def test_kit_renders_and_escapes():
 def test_kit_prompt_carries_channel_dates_and_budget():
     prompt = launch_kit.build_kit_prompt("Strategy text", "LinkedIn", "Maple Advisory Group", datetime.date(2026, 12, 1),
                                          "investment season Dec-Feb", "$300-500/month", "travelling in November")
+    assert "never a JSON key name" in prompt and "never \"Request demo\"" in prompt
     for text in ["LinkedIn", "Maple Advisory Group", "December 1, 2026", "investment season Dec-Feb", "$300-500/month", "travelling in November", "qualifies_if", "how_it_works"]:
         assert text in prompt
 
@@ -76,6 +77,7 @@ def test_report_prompt_uses_dates_and_success_measures():
     assert '"success_measure"' in prompt
     assert "do not assume customers will refer" in prompt
     assert "At least one insight should turn" not in prompt
+    assert "already decided to run ads at a certain time" in prompt
     undated = strategy_report.build_report_prompt("notes")
     assert '"Week 1"' in undated
 
@@ -124,6 +126,9 @@ def test_app_builds_kit_from_report_with_stubbed_claude():
     at.text_area(key="report_text").input("A financial advisor in Ontario who gets clients by referral and wants LinkedIn leads.")
     next(b for b in at.button if b.label == "Build strategy report").click().run()
     assert not at.exception
+    next(b for b in at.button if b.label == "Build a launch kit from this report →").click().run()
+    assert not at.exception
+    assert at.session_state["main_tab"] == "Launch kit"
     at.selectbox(key="kit_channel_pick").select("LinkedIn")
     at.text_input(key="kit_budget").input("$400 for December")
     next(b for b in at.button if b.label == "Build launch kit").click().run()

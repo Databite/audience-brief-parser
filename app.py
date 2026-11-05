@@ -367,6 +367,10 @@ def current_cost_cap():
     """The session cost cap for whichever plan is currently selected."""
     return PLAN_COST_CAPS[st.session_state.user_plan]
 
+def go_to_launch_kit():
+    """Button callback: switch the main tabs to the Launch kit tab."""
+    st.session_state["main_tab"] = "Launch kit"
+
 def remaining_budget():
     return max(0.0, current_cost_cap() - st.session_state.total_cost)
 
@@ -394,7 +398,9 @@ st.warning("This is a public prototype with no privacy policy or data handling a
 st.caption("This is a prototype, not a validated production tool, always sanity-check the output before using it with a client.")
 st.caption(f"Session usage cap ({st.session_state.user_plan}): \\${current_cost_cap():.2f}. Used so far: \\${st.session_state.total_cost:.5f}. Remaining: \\${remaining_budget():.5f}.")
 
-report_tab, kit_tab, agency_tab = st.tabs(["Strategy report", "Launch kit", "For agencies"])
+# Keyed with on_change="rerun" so the "Next: build a launch kit" button can
+# switch tabs by setting st.session_state["main_tab"].
+report_tab, kit_tab, agency_tab = st.tabs(["Strategy report", "Launch kit", "For agencies"], key="main_tab", on_change="rerun")
 
 with agency_tab:
     st.write("Audience schema extraction for ad agencies: turn a plain-language ad brief into fields a data team can query.")
@@ -845,6 +851,9 @@ with report_tab:
             "text/markdown"
         )
         st.caption(f"This report cost approximately \\${st.session_state.get('last_report_cost', 0.0):.5f}")
+        st.divider()
+        st.markdown("**Next step:** turn one channel from this plan into ready-to-use posts, ads, a lead form and a dated checklist.")
+        st.button("Build a launch kit from this report →", on_click=go_to_launch_kit, type="primary")
 
 with kit_tab:
     st.write("Turn one channel from a strategy into everything needed to launch it: ready-to-paste posts, ad copy, a lead form with qualifying questions, targeting, budget, reply scripts and a dated checklist with success measures.")

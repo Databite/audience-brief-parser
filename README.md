@@ -111,7 +111,7 @@ The "Strategy report" tab turns free text about a business into a client-ready A
 5. **Next 30 days:** dated actions, each with how to know it's done or working.
 6. **Open questions:** validation questions, each with why it matters.
 
-**Download.** As a print-ready HTML page (open it and print to PDF for the client) or as Markdown.
+**Download.** As a print-ready HTML page (open it and print to PDF for the client) or as Markdown. Below the downloads, **Build a launch kit from this report →** switches to the Launch kit tab with this report selected.
 
 **Cost and limits.** One report is estimated at up to $0.50 against the session cap. The response is allowed up to 32,000 output tokens (the model's thinking counts against the same budget) so long reports aren't cut off; if one is still cut off, the app shows the sections that arrived, flags what's missing and warns you, instead of failing silently.
 
