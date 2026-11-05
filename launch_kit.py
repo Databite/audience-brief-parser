@@ -48,14 +48,14 @@ Sections to produce:
 
 1. goal: one sentence on what this launch should achieve.
 2. qualified_lead: one sentence defining a qualified lead for this business (the criteria a person must meet to be worth an appointment).
-3. posts: 8-12 organic posts for this channel, in publishing order. Each has "date", "title" (a few words), "copy" (the full post, ready to paste, in the channel's normal length and format) and "call_to_action" (the exact last line, e.g. a keyword to message back). Mix formats the channel supports.
+3. posts: 8-12 organic posts for this channel, in publishing order. Each has "date", "title" (a few words), "copy" (the complete post exactly as the owner pastes it, in the channel's normal length and format, including its call to action and any hashtags) and "call_to_action" (the call-to-action line quoted from the copy, e.g. a keyword to message back). Mix formats the channel supports.
 4. ads: if this channel has an ad budget, 2-3 ad variations to test, each with "name", "audience" (which segment it targets), "headline", "primary_text" and "cta_button" (a button label the platform offers that fits what the person gets, e.g. "Sign up" or "Learn more" for booking a call, never "Request demo" for a service business). Otherwise an empty list.
 5. lead_form: if there are ads, the lead form they point to: "headline", "intro" (1-2 sentences), "questions" (3-5 short multiple-choice qualifying questions, each with "question", "answers" (a list of choices) and "qualifies_if" (which answers make a qualified lead)), "privacy_note" (one line) and "thank_you" (what the person sees after submitting, including what happens next) and "how_it_works" (4-5 plain-language steps, in order, for an owner who has never used this platform's lead forms: where to create the form and attach it to the ad (name the platform's own tool, e.g. LinkedIn Lead Gen Forms in Campaign Manager or Meta Instant Forms in Ads Manager), what the prospect sees when they click the ad button (the form opens on the platform, pre-filled from their profile, no website needed), where submitted leads arrive and how the owner is notified, and how to check answers against qualifies_if and reply within 24 hours using the reply scripts). The questions must screen out people who do not meet the qualified_lead criteria. Without ads, return an object with empty strings and an empty questions list.
 6. targeting: settings to enter on the platform, 4-8 rows of "setting" and "value" (e.g. location, job titles, company size, age, interests, exclusions). For an organic channel, describe who to connect with or which groups to join instead.
 7. budget: "total" (for the launch period), "daily", "schedule" (when ads run, around the owner's dates) and "stop_rule" (the result that means pause or change the ads). For an organic channel, use "No ad spend" and a stop rule for the posting effort.
 8. reply_scripts: 2-4 messages to send when someone responds (a DM, a comment, a form lead), each with "situation" and "message". Each moves a qualified person toward booking an appointment within 24 hours.
 9. checklist: 8-15 steps in order, covering setup, launch and review. Each has "date", "step" (one concrete action) and "done_when" (how the owner knows it is finished).
-10. success_measures: 2-4 rows, each with "metric", "target" (a number) and "check_on" (a date), including qualified leads and booked appointments.
+10. success_measures: 2-4 rows, each with "metric", "target" (a number; propose one from the budget and channel rather than leaving a placeholder) and "check_on" (a date), including qualified leads and booked appointments.
 
 Keep copy tight and every instruction to 1-2 sentences. When one part of the kit mentions another, use its plain heading ("the lead form", "Qualifies if", "the stop rule", "the success measures", "the reply scripts"), never a JSON key name like qualifies_if or stop_rule, and never "above" or "below". Write the JSON keys in the order shown below, so the checklist, measures and lead form come before the long post copy.
 
@@ -113,7 +113,41 @@ def normalize_kit(kit):
         q["answers"] = [str(a) for a in q.get("answers") or []]
     budget = kit.get("budget") or {}
     kit["budget"] = {field: budget.get(field) or "" for field in BUDGET_FIELDS}
+    _tidy(kit)
     return kit
+
+
+QUALIFIED_LEAD_PREFIX = re.compile(r"^\s*(a\s+)?qualified\s+lead\s+(is|=)\s*:?\s*", re.IGNORECASE)
+# "the questions below." -> "the questions." Only before punctuation or the
+# end, so "above $100K" or "below 30" stay as they are.
+POSITION_WORD = re.compile(r"\s+(listed\s+|shown\s+)?(above|below)(?=[.,;:)]|$)", re.IGNORECASE)
+
+
+def _squash(text):
+    return re.sub(r"\W+", " ", str(text)).strip().lower()
+
+
+def _tidy(kit):
+    """Fix the wording slips the model makes even when told not to, so they
+    never reach a client: a doubled "A qualified lead is" label, "above" or
+    "below" (meaningless once sections move), and a call to action printed
+    twice because it is also inside the post copy."""
+    kit["qualified_lead"] = QUALIFIED_LEAD_PREFIX.sub("", kit["qualified_lead"])
+    if kit["qualified_lead"]:
+        kit["qualified_lead"] = kit["qualified_lead"][0].upper() + kit["qualified_lead"][1:]
+    unplace = lambda text: POSITION_WORD.sub("", str(text or ""))
+    for item in kit["checklist"]:
+        for field in ("step", "done_when"):
+            if item.get(field):
+                item[field] = unplace(item[field])
+    form = kit["lead_form"]
+    form["how_it_works"] = [unplace(step) for step in form["how_it_works"]]
+    for field in ("intro", "thank_you"):
+        form[field] = unplace(form[field])
+    for post in kit["posts"]:
+        cta = _squash(post.get("call_to_action", ""))
+        if cta and cta in _squash(post.get("copy", "")):
+            post["call_to_action"] = ""
 
 
 def validate_kit(kit):
@@ -164,7 +198,7 @@ def kit_to_markdown(kit):
     if kit["goal"]:
         lines += [f"**Goal:** {kit['goal']}", ""]
     if kit["qualified_lead"]:
-        lines += [f"**A qualified lead is:** {kit['qualified_lead']}", ""]
+        lines += [f"**A qualified lead:** {kit['qualified_lead']}", ""]
     lines += ["## Checklist", ""]
     for item in kit["checklist"]:
         lines.append(f"- [ ] **{item.get('date', '')}:** {item.get('step', '')} *Done when: {item.get('done_when', '')}*")
@@ -173,7 +207,7 @@ def kit_to_markdown(kit):
         lines.append("| " + " | ".join(str(m.get(k, "")).replace("|", "/") for k in ("metric", "target", "check_on")) + " |")
     lines += ["", "## Posts", ""]
     for i, post in enumerate(kit["posts"], 1):
-        lines += [f"### {i}. {post.get('date', '')}: {post.get('title', '')}", "", post.get("copy", ""), "", f"**Call to action:** {post.get('call_to_action', '')}", ""]
+        lines += [f"### {i}. {post.get('date', '')}: {post.get('title', '')}", "", post.get("copy", ""), ""] + ([f"**Call to action:** {post['call_to_action']}", ""] if post.get("call_to_action") else [])
     if kit["ads"]:
         lines += ["## Ads", ""]
         for ad in kit["ads"]:
@@ -295,7 +329,7 @@ def kit_to_html(kit, month_label="", prepared_by="Databite"):
     parts.append(_stat(e(budget["total"] or "No ad spend"), "Budget" + (f" &middot; {e(budget['daily'])}" if budget["daily"] else "")))
     if kit["success_measures"]:
         m = kit["success_measures"][0]
-        parts.append(_stat(e(m.get("target")), f"{e(m.get('metric'))}" + (f" by {e(m.get('check_on'))}" if m.get("check_on") else "")))
+        parts.append(_stat(copy(m.get("target")), f"{e(m.get('metric'))}" + (f" by {e(m.get('check_on'))}" if m.get("check_on") else "")))
     parts.append(_stat(str(len(kit["checklist"])), f"dated steps &middot; {len(kit['posts'])} ready-to-post posts"))
     parts.append("</div>")
     if kit["goal"] or kit["qualified_lead"] or budget["stop_rule"]:
@@ -303,7 +337,7 @@ def kit_to_html(kit, month_label="", prepared_by="Databite"):
         if kit["goal"]:
             parts.append(f"<p><strong>Goal.</strong> {e(kit['goal'])}</p>")
         if kit["qualified_lead"]:
-            parts.append(f"<p><strong>A qualified lead is</strong> {e(kit['qualified_lead'])}</p>")
+            parts.append(f"<p><strong>A qualified lead.</strong> {e(kit['qualified_lead'])}</p>")
         if budget["stop_rule"]:
             parts.append(f"<p><strong>Stop rule.</strong> {e(budget['stop_rule'])}</p>")
         parts.append("</div>")
@@ -322,7 +356,7 @@ def kit_to_html(kit, month_label="", prepared_by="Databite"):
     if kit["success_measures"]:
         parts.append("<div class='keep'><h2 style='margin-top:24px'>How you'll know it's working</h2><table class='measures'><thead><tr><th>Measure</th><th>Target</th><th>Check on</th></tr></thead><tbody>")
         for m in kit["success_measures"]:
-            parts.append(f"<tr><td>{e(m.get('metric'))}</td><td class='target'>{e(m.get('target'))}</td><td>{e(m.get('check_on'))}</td></tr>")
+            parts.append(f"<tr><td>{e(m.get('metric'))}</td><td class='target'>{copy(m.get('target'))}</td><td>{e(m.get('check_on'))}</td></tr>")
         parts.append("</tbody></table></div>")
 
     if form["questions"]:
@@ -364,7 +398,7 @@ def kit_to_html(kit, month_label="", prepared_by="Databite"):
         parts.append("<p class='intro' style='color:var(--muted)'>Shaded <span class='placeholder'>[brackets]</span> mark details only you can fill in.</p>")
         for post in kit["posts"]:
             parts.append(f"<div class='post'><div class='card-label'>{e(post.get('date'))}</div><div class='card-title'>{e(post.get('title'))}</div>"
-                         f"<p>{copy(post.get('copy'))}</p><p class='cta'>{copy(post.get('call_to_action'))}</p></div>")
+                         f"<p>{copy(post.get('copy'))}</p>" + (f"<p class='cta'>{copy(post.get('call_to_action'))}</p>" if post.get("call_to_action") else "") + "</div>")
 
     footer_left = " &middot; ".join(e(x) for x in (prepared_by, "Launch kit", month_label) if x)
     parts.append(f"<div class='footer'><strong>{footer_left}</strong><span>{e(kit['business_name'])}</span></div>")
