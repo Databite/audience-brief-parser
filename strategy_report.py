@@ -31,11 +31,12 @@ SOURCE_TYPES = {
 }
 MIN_SOURCE_LENGTH = 50
 MAX_SOURCE_LENGTH = 40000
-# A full six-section report runs ~5-8K output tokens; 6K cut real reports off
-# mid-JSON, so leave generous headroom. The estimate covers the worst case
-# (16K output tokens at $0.015/1K) so the session cap check stays honest.
-REPORT_MAX_TOKENS = 16000
-ESTIMATED_COST_PER_REPORT = 0.25
+# A full six-section report runs ~5-8K tokens of JSON, and the model's
+# thinking tokens count against the same budget, so leave generous headroom.
+# The estimate covers the worst case (32K output tokens at $0.015/1K) so the
+# session cap check stays honest.
+REPORT_MAX_TOKENS = 32000
+ESTIMATED_COST_PER_REPORT = 0.50
 
 AUDIENCE_CARDS = [
     ("core_profile", "Core profile"),

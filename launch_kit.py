@@ -23,9 +23,11 @@ import json
 
 import strategy_report
 
-KIT_MAX_TOKENS = 12000
-# Worst case: 12K output tokens at $0.015/1K plus a few thousand input tokens.
-ESTIMATED_COST_PER_KIT = 0.20
+# The kit's JSON runs ~5-8K tokens and the model's thinking tokens count
+# against the same budget; 12K cut real kits off before the checklist.
+KIT_MAX_TOKENS = 32000
+# Worst case: 32K output tokens at $0.015/1K plus a few thousand input tokens.
+ESTIMATED_COST_PER_KIT = 0.50
 
 
 def build_kit_prompt(context_text, channel, business_name="", start_date=None, key_dates="", budget="", notes=""):
@@ -51,7 +53,7 @@ Sections to produce:
 9. checklist: 8-15 steps in order, covering setup, launch and review. Each has "date", "step" (one concrete action) and "done_when" (how the owner knows it is finished).
 10. success_measures: 2-4 rows, each with "metric", "target" (a number) and "check_on" (a date), including qualified leads and booked appointments.
 
-Keep copy tight and every instruction to 1-2 sentences.
+Keep copy tight and every instruction to 1-2 sentences. Write the JSON keys in the order shown below, so the checklist, measures and lead form come before the long post copy.
 
 Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
 {{
@@ -59,14 +61,14 @@ Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly
   "channel": "...",
   "goal": "...",
   "qualified_lead": "...",
-  "posts": [{{"date": "...", "title": "...", "copy": "...", "call_to_action": "..."}}],
+  "checklist": [{{"date": "...", "step": "...", "done_when": "..."}}],
+  "success_measures": [{{"metric": "...", "target": "...", "check_on": "..."}}],
   "ads": [{{"name": "...", "audience": "...", "headline": "...", "primary_text": "...", "cta_button": "..."}}],
   "lead_form": {{"headline": "...", "intro": "...", "questions": [{{"question": "...", "answers": ["...", "..."], "qualifies_if": "..."}}], "privacy_note": "...", "thank_you": "...", "how_it_works": ["...", "..."]}},
   "targeting": [{{"setting": "...", "value": "..."}}],
   "budget": {{"total": "...", "daily": "...", "schedule": "...", "stop_rule": "..."}},
   "reply_scripts": [{{"situation": "...", "message": "..."}}],
-  "checklist": [{{"date": "...", "step": "...", "done_when": "..."}}],
-  "success_measures": [{{"metric": "...", "target": "...", "check_on": "..."}}]
+  "posts": [{{"date": "...", "title": "...", "copy": "...", "call_to_action": "..."}}]
 }}
 
 Strategy or notes:
@@ -218,7 +220,8 @@ def kit_to_html(kit, month_label="", prepared_by="Databite"):
             parts.append(f"<p><strong>A qualified lead is:</strong> {e(kit['qualified_lead'])}</p>")
         parts.append("</div>")
 
-    parts += ["<div class='section-label'>01 &mdash; Checklist</div>", "<h2>Step by step</h2>"]
+    if kit["checklist"] or kit["success_measures"]:
+        parts += ["<div class='section-label'>01 &mdash; Checklist</div>", "<h2>Step by step</h2>"]
     for item in kit["checklist"]:
         parts.append(f"<div class='check'><strong>{e(item.get('date'))}</strong><div>{e(item.get('step'))}<p>Done when: {e(item.get('done_when'))}</p></div></div>")
     if kit["success_measures"]:
