@@ -247,7 +247,8 @@ KIT_CSS = strategy_report.REPORT_CSS + """
 h2 { break-after:avoid; }
 .section-label { break-after:avoid; }
 @media (max-width: 700px) { .stats { grid-template-columns:1fr; } .check { grid-template-columns:18px 1fr; } .check .date { grid-column:2; } }
-@media print { @page { margin:0.6in; } .page-break { break-before:page; } }
+.keep { break-inside:avoid; }
+@media print { @page { margin:0.6in; } }
 """
 
 
@@ -319,13 +320,13 @@ def kit_to_html(kit, month_label="", prepared_by="Databite"):
             parts.append(f"<div class='check'><div class='box'></div><div class='date'>{e(item.get('date'))}</div>"
                          f"<div>{copy(item.get('step'))}<p>Done when: {e(item.get('done_when'))}</p></div></div>")
     if kit["success_measures"]:
-        parts.append("<h2 style='margin-top:24px'>How you'll know it's working</h2><table class='measures'><thead><tr><th>Measure</th><th>Target</th><th>Check on</th></tr></thead><tbody>")
+        parts.append("<div class='keep'><h2 style='margin-top:24px'>How you'll know it's working</h2><table class='measures'><thead><tr><th>Measure</th><th>Target</th><th>Check on</th></tr></thead><tbody>")
         for m in kit["success_measures"]:
             parts.append(f"<tr><td>{e(m.get('metric'))}</td><td class='target'>{e(m.get('target'))}</td><td>{e(m.get('check_on'))}</td></tr>")
-        parts.append("</tbody></table>")
+        parts.append("</tbody></table></div>")
 
     if form["questions"]:
-        parts += ["<div class='page-break'></div>"] + section("Lead form", "Screen leads before you call")
+        parts += section("Lead form", "Screen leads before you call")
         if form["how_it_works"]:
             parts.append("<div class='steps'><div class='eyebrow'>How the lead form works</div><ol>" + "".join(f"<li>{e(step)}</li>" for step in form["how_it_works"]) + "</ol></div>")
         parts.append(f"<div class='form'><div class='form-title'>{e(form['headline'])}</div><p class='intro'>{e(form['intro'])}</p>")
@@ -359,7 +360,7 @@ def kit_to_html(kit, month_label="", prepared_by="Databite"):
             parts.append(f"<div class='script'><div class='situation'>{e(r.get('situation'))}</div><p>{copy(r.get('message'))}</p></div>")
 
     if kit["posts"]:
-        parts += ["<div class='page-break'></div>"] + section("Posts", "Ready to paste")
+        parts += section("Posts", "Ready to paste")
         parts.append("<p class='intro' style='color:var(--muted)'>Shaded <span class='placeholder'>[brackets]</span> mark details only you can fill in.</p>")
         for post in kit["posts"]:
             parts.append(f"<div class='post'><div class='card-label'>{e(post.get('date'))}</div><div class='card-title'>{e(post.get('title'))}</div>"
