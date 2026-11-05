@@ -71,6 +71,29 @@ def test_kit_html_marks_qualifying_answers_and_placeholders():
     assert "Your launch on one page" in page and "$400 for December" in page
 
 
+def test_kit_tidies_repeated_labels_position_words_and_ctas():
+    data = json.loads(KIT_FIXTURE)
+    data["qualified_lead"] = "A qualified lead is a person in Canada 10+ years who books a call."
+    data["checklist"][0]["step"] = "Build the form using the four qualifying questions below."
+    data["lead_form"]["how_it_works"][0] = "Create the form using the headline and questions above."
+    data["targeting"][0]["value"] = "Household income above $100K"
+    data["posts"][0]["copy"] = "Tax season is close.\n\nComment PLAN and I'll send you the questions.\n\n#Tax"
+    data["posts"][0]["call_to_action"] = "Comment PLAN and I'll send you the questions."
+    data["success_measures"][0]["target"] = "[number you can commit to]"
+    kit = launch_kit.normalize_kit(data)
+    assert kit["qualified_lead"].startswith("A person in Canada")
+    assert kit["checklist"][0]["step"].endswith("qualifying questions.")
+    assert kit["lead_form"]["how_it_works"][0].endswith("questions.")
+    assert kit["targeting"][0]["value"] == "Household income above $100K"
+    assert kit["posts"][0]["call_to_action"] == ""
+    page = launch_kit.kit_to_html(kit)
+    assert page.count("Comment PLAN") == 1
+    assert "A qualified lead is A" not in page
+    assert "<span class='placeholder'>[number you can commit to]</span>" in page
+    assert launch_kit.kit_to_markdown(kit).count("Comment PLAN") == 1
+
+
+
 def test_kit_prompt_carries_channel_dates_and_budget():
     prompt = launch_kit.build_kit_prompt("Strategy text", "LinkedIn", "Maple Advisory Group", datetime.date(2026, 12, 1),
                                          "investment season Dec-Feb", "$300-500/month", "travelling in November")
