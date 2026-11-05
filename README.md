@@ -121,7 +121,7 @@ Prompt, validation and rendering live in `strategy_report.py`, which has no Stre
 
 ## Launch kit
 
-The "Launch kit" tab builds from the strategy report made in the same session (pick one of its channels) or from a pasted strategy, notes or transcript (name the channel). Set the launch start date, an optional ad budget, key dates and any notes, such as who counts as a qualified lead.
+The "Launch kit" tab builds from the strategy report made in the same session (pick one of its channels; the report's original notes or transcript are sent too, so details the report summarized away still reach the kit) or from a pasted strategy, notes or transcript (name the channel). Set the launch start date, an optional ad budget, key dates and any notes, such as who counts as a qualified lead.
 
 **Output:**
 

@@ -30,7 +30,10 @@ KIT_MAX_TOKENS = 32000
 ESTIMATED_COST_PER_KIT = 0.50
 
 
-def build_kit_prompt(context_text, channel, business_name="", start_date=None, key_dates="", budget="", notes=""):
+def build_kit_prompt(context_text, channel, business_name="", start_date=None, key_dates="", budget="", notes="", source_text=""):
+    """source_text is the original notes or transcript a strategy report was
+    built from. The report is a summary, so passing the source keeps facts the
+    report left out (e.g. that the owner built a product they mention)."""
     business_line = f"The business is called {business_name}." if business_name.strip() else "Infer the business's name from the text if it is stated; otherwise use an empty string."
     budget_line = f"Ad budget for this channel: {budget.strip()}." if budget.strip() else "No ad budget was given, so treat this as an organic launch unless the strategy below gives this channel a budget."
     notes_line = f"Extra notes from the owner: {notes.strip()}" if notes.strip() else ""
@@ -74,6 +77,17 @@ Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly
 Strategy or notes:
 \"\"\"
 {context_text}
+\"\"\"
+{_source_block(source_text)}"""
+
+
+def _source_block(source_text):
+    if not source_text.strip():
+        return ""
+    return f"""
+Original notes or transcript the strategy was built from. Use it for facts the strategy leaves out, such as what the owner built, offers or has already tried, and describe those things in the owner's own terms. Where the two disagree on the plan, follow the strategy.
+\"\"\"
+{source_text.strip()}
 \"\"\"
 """
 

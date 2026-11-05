@@ -776,6 +776,7 @@ with report_tab:
                     try:
                         st.session_state.last_report = strategy_report.parse_report(result_text, truncated=truncated)
                         st.session_state.last_report_source_type = report_source_type
+                        st.session_state.last_report_source = source
                         log_event("strategy_report", cost, True)
                     except (json.JSONDecodeError, ValueError):
                         st.session_state.last_report = None
@@ -891,7 +892,8 @@ with kit_tab:
                 st.warning(error_message)
             else:
                 with st.spinner("Building the launch kit with Claude..."):
-                    prompt = launch_kit.build_kit_prompt(context, kit_channel, kit_business, kit_start, kit_key_dates, kit_budget, kit_notes)
+                    prompt = launch_kit.build_kit_prompt(context, kit_channel, kit_business, kit_start, kit_key_dates, kit_budget, kit_notes,
+                                                         source_text=st.session_state.get("last_report_source", "") if use_report else "")
                     result_text, cost, truncated, api_error = call_claude(prompt, launch_kit.KIT_MAX_TOKENS)
                 if api_error:
                     st.error(api_error)

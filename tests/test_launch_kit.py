@@ -71,6 +71,12 @@ def test_kit_prompt_carries_channel_dates_and_budget():
         assert text in prompt
 
 
+def test_kit_prompt_includes_report_source_only_when_given():
+    with_source = launch_kit.build_kit_prompt("Strategy text", "LinkedIn", source_text="I built a receipt-storage app myself.")
+    assert "Original notes or transcript" in with_source and "I built a receipt-storage app myself." in with_source
+    assert "Original notes or transcript" not in launch_kit.build_kit_prompt("Strategy text", "LinkedIn")
+
+
 def test_report_prompt_uses_dates_and_success_measures():
     prompt = strategy_report.build_report_prompt("notes", "", "free_text", datetime.date(2026, 11, 2), "Diwali Nov 8")
     assert "Monday, November 2, 2026" in prompt and "Diwali Nov 8" in prompt
@@ -94,7 +100,8 @@ def test_report_flags_missing_success_measure():
 def test_app_builds_kit_from_report_with_stubbed_claude():
     from streamlit.testing.v1 import AppTest
 
-    # Stub Anthropic: the report prompt gets the report, the kit prompt the kit.
+    # Stub Anthropic: the report prompt gets the report, and the kit prompt
+    # gets the kit only if it carries the report's original source text.
     at = AppTest.from_string(
         "import sys\n"
         f"sys.path.insert(0, {str(ROOT)!r})\n"
@@ -102,7 +109,10 @@ def test_app_builds_kit_from_report_with_stubbed_claude():
         f"RESPONSES = [{REPORT_FIXTURE!r}, {KIT_FIXTURE!r}]\n"
         "class _Msgs:\n"
         "    def create(self, **kw):\n"
-        "        text = RESPONSES[1 if 'launch kit' in kw['messages'][0]['content'] else 0]\n"
+        "        content = kw['messages'][0]['content']\n"
+        "        if 'launch kit' not in content: text = RESPONSES[0]\n"
+        "        elif 'gets clients by referral' in content: text = RESPONSES[1]\n"
+        "        else: text = 'kit prompt is missing the report source'\n"
         "        class U: input_tokens = 5000; output_tokens = 3000\n"
         "        class B: type = 'text'\n"
         "        B.text = text\n"
