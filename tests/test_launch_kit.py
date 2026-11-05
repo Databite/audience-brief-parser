@@ -63,6 +63,14 @@ def test_kit_renders_and_escapes():
     assert "- [ ] **Dec 1:**" in md and "Qualifies if: Yes or planning to" in md
 
 
+def test_kit_html_marks_qualifying_answers_and_placeholders():
+    page = launch_kit.kit_to_html(launch_kit.parse_kit(KIT_FIXTURE))
+    assert "<span class='answer yes'>10+ years</span>" in page
+    assert "<span class='answer'>No</span>" in page
+    assert "<span class='placeholder'>[amount]</span>" in page
+    assert "Your launch on one page" in page and "$400 for December" in page
+
+
 def test_kit_prompt_carries_channel_dates_and_budget():
     prompt = launch_kit.build_kit_prompt("Strategy text", "LinkedIn", "Maple Advisory Group", datetime.date(2026, 12, 1),
                                          "investment season Dec-Feb", "$300-500/month", "travelling in November")
