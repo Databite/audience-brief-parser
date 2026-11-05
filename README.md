@@ -113,7 +113,7 @@ The "Strategy report" tab turns free text about a business into a client-ready A
 
 **Download.** As a print-ready HTML page (open it and print to PDF for the client) or as Markdown.
 
-**Cost and limits.** One report is estimated at about $0.25 against the session cap. The response is allowed up to 16,000 output tokens so long reports aren't cut off; if one is still cut off, the app shows the sections that arrived, flags what's missing and warns you, instead of failing silently.
+**Cost and limits.** One report is estimated at up to $0.50 against the session cap. The response is allowed up to 32,000 output tokens (the model's thinking counts against the same budget) so long reports aren't cut off; if one is still cut off, the app shows the sections that arrived, flags what's missing and warns you, instead of failing silently.
 
 The prompt doesn't assume customers will refer or reply just because they're asked. Referral advice is based on how the owner says new clients arrive today, and any new ask is framed as a test with a success measure.
 
@@ -132,7 +132,7 @@ The "Launch kit" tab builds from the strategy report made in the same session (p
 - **Targeting and budget:** platform settings to enter, total and daily budget, schedule and a stop rule.
 - **Reply scripts:** what to send when someone responds, aimed at booking a call within 24 hours.
 
-Download it as print-ready HTML or Markdown. One kit is estimated at about $0.20 against the session cap and is logged as a `launch_kit` event. The code is in `launch_kit.py`, tested in `tests/test_launch_kit.py`.
+Download it as print-ready HTML or Markdown. One kit is estimated at up to $0.50 against the session cap and is logged as a `launch_kit` event. The code is in `launch_kit.py`, tested in `tests/test_launch_kit.py`.
 
 ## Audience persona generator (Premium feature)
 

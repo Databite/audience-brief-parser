@@ -240,12 +240,16 @@ def clean_json_text(text):
     return text.strip()
 
 def call_claude(prompt, max_tokens):
+    # Streamed so large output budgets don't hit the SDK's non-streaming
+    # timeout guard. The model thinks before answering and those thinking
+    # tokens count against max_tokens, so budgets must leave room for both.
     try:
-        response = client.messages.create(
+        with client.messages.stream(
             model=MODEL,
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}]
-        )
+        ) as stream:
+            response = stream.get_final_message()
     except RateLimitError:
         return None, 0.0, False, "The AI service is temporarily rate limited. Please wait a moment and try again."
     except APIConnectionError:
