@@ -20,6 +20,7 @@ Kept free of Streamlit, like strategy_report, so it can be unit tested.
 
 import html
 import json
+import re
 
 import strategy_report
 
@@ -30,7 +31,10 @@ KIT_MAX_TOKENS = 32000
 ESTIMATED_COST_PER_KIT = 0.50
 
 
-def build_kit_prompt(context_text, channel, business_name="", start_date=None, key_dates="", budget="", notes=""):
+def build_kit_prompt(context_text, channel, business_name="", start_date=None, key_dates="", budget="", notes="", source_text=""):
+    """source_text is the original notes or transcript a strategy report was
+    built from. The report is a summary, so passing the source keeps facts the
+    report left out (e.g. that the owner built a product they mention)."""
     business_line = f"The business is called {business_name}." if business_name.strip() else "Infer the business's name from the text if it is stated; otherwise use an empty string."
     budget_line = f"Ad budget for this channel: {budget.strip()}." if budget.strip() else "No ad budget was given, so treat this as an organic launch unless the strategy below gives this channel a budget."
     notes_line = f"Extra notes from the owner: {notes.strip()}" if notes.strip() else ""
@@ -45,7 +49,7 @@ Sections to produce:
 1. goal: one sentence on what this launch should achieve.
 2. qualified_lead: one sentence defining a qualified lead for this business (the criteria a person must meet to be worth an appointment).
 3. posts: 8-12 organic posts for this channel, in publishing order. Each has "date", "title" (a few words), "copy" (the full post, ready to paste, in the channel's normal length and format) and "call_to_action" (the exact last line, e.g. a keyword to message back). Mix formats the channel supports.
-4. ads: if this channel has an ad budget, 2-3 ad variations to test, each with "name", "audience" (which segment it targets), "headline", "primary_text" and "cta_button" (a button label the platform offers). Otherwise an empty list.
+4. ads: if this channel has an ad budget, 2-3 ad variations to test, each with "name", "audience" (which segment it targets), "headline", "primary_text" and "cta_button" (a button label the platform offers that fits what the person gets, e.g. "Sign up" or "Learn more" for booking a call, never "Request demo" for a service business). Otherwise an empty list.
 5. lead_form: if there are ads, the lead form they point to: "headline", "intro" (1-2 sentences), "questions" (3-5 short multiple-choice qualifying questions, each with "question", "answers" (a list of choices) and "qualifies_if" (which answers make a qualified lead)), "privacy_note" (one line) and "thank_you" (what the person sees after submitting, including what happens next) and "how_it_works" (4-5 plain-language steps, in order, for an owner who has never used this platform's lead forms: where to create the form and attach it to the ad (name the platform's own tool, e.g. LinkedIn Lead Gen Forms in Campaign Manager or Meta Instant Forms in Ads Manager), what the prospect sees when they click the ad button (the form opens on the platform, pre-filled from their profile, no website needed), where submitted leads arrive and how the owner is notified, and how to check answers against qualifies_if and reply within 24 hours using the reply scripts). The questions must screen out people who do not meet the qualified_lead criteria. Without ads, return an object with empty strings and an empty questions list.
 6. targeting: settings to enter on the platform, 4-8 rows of "setting" and "value" (e.g. location, job titles, company size, age, interests, exclusions). For an organic channel, describe who to connect with or which groups to join instead.
 7. budget: "total" (for the launch period), "daily", "schedule" (when ads run, around the owner's dates) and "stop_rule" (the result that means pause or change the ads). For an organic channel, use "No ad spend" and a stop rule for the posting effort.
@@ -53,7 +57,7 @@ Sections to produce:
 9. checklist: 8-15 steps in order, covering setup, launch and review. Each has "date", "step" (one concrete action) and "done_when" (how the owner knows it is finished).
 10. success_measures: 2-4 rows, each with "metric", "target" (a number) and "check_on" (a date), including qualified leads and booked appointments.
 
-Keep copy tight and every instruction to 1-2 sentences. Write the JSON keys in the order shown below, so the checklist, measures and lead form come before the long post copy.
+Keep copy tight and every instruction to 1-2 sentences. When one part of the kit mentions another, use its plain heading ("the lead form", "Qualifies if", "the stop rule", "the success measures", "the reply scripts"), never a JSON key name like qualifies_if or stop_rule, and never "above" or "below". Write the JSON keys in the order shown below, so the checklist, measures and lead form come before the long post copy.
 
 Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly this shape:
 {{
@@ -74,6 +78,17 @@ Respond with ONLY valid JSON, no other text, no markdown code fences, in exactly
 Strategy or notes:
 \"\"\"
 {context_text}
+\"\"\"
+{_source_block(source_text)}"""
+
+
+def _source_block(source_text):
+    if not source_text.strip():
+        return ""
+    return f"""
+Original notes or transcript the strategy was built from. Use it for facts the strategy leaves out, such as what the owner built, offers or has already tried, and describe those things in the owner's own terms. Where the two disagree on the plan, follow the strategy.
+\"\"\"
+{source_text.strip()}
 \"\"\"
 """
 
@@ -186,19 +201,79 @@ def kit_to_markdown(kit):
 
 
 KIT_CSS = strategy_report.REPORT_CSS + """
-.post { border:1px solid var(--line); border-top:2px solid var(--accent); padding:12px 16px; margin-bottom:12px; }
-.post p { margin:6px 0 0; white-space:pre-wrap; }
-.post .cta { color:var(--accent); font-weight:500; }
-.check { display:grid; grid-template-columns:22px 110px 1fr; gap:6px; margin-bottom:10px; }
-.check::before { content:"\\2610"; color:var(--accent); }
+.chip.version { background:var(--chip); color:var(--accent); font-weight:600; }
+.stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin:16px 0; }
+.stat { border:1px solid var(--line); border-top:3px solid var(--accent); padding:14px 16px; }
+.stat:nth-child(2) { border-top-color:var(--warn); }
+.stat-num { font-family:'Fraunces', Georgia, serif; font-size:30px; line-height:1.1; color:var(--accent); }
+.stat:nth-child(2) .stat-num { color:var(--warn); }
+.stat-num.small { font-size:20px; }
+.stat-label { font-size:12px; color:var(--muted); margin-top:6px; }
+.glance { background:#eef3ef; padding:16px 20px; margin-top:6px; }
+.glance .eyebrow { color:var(--accent); font-weight:600; margin-bottom:6px; }
+.glance p { margin:6px 0; }
+.check { display:grid; grid-template-columns:18px 118px 1fr; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); break-inside:avoid; }
+.check .box { width:13px; height:13px; border:1.5px solid var(--accent); margin-top:4px; }
+.check .date { font-size:12px; font-weight:600; color:var(--accent); }
 .check p { margin:2px 0 0; color:var(--muted); font-size:12.5px; }
-blockquote { margin:6px 0 14px; padding:8px 14px; border-left:3px solid var(--accent); background:var(--chip); }
+.measures td.target { font-family:'Fraunces', Georgia, serif; font-size:18px; color:var(--warn); white-space:nowrap; }
+.steps { background:#eef3ef; padding:14px 18px 6px; margin-bottom:18px; break-inside:avoid; }
+.steps ol { margin:6px 0 8px; padding-left:20px; }
+.steps li { margin-bottom:6px; }
+.form { border:1px solid var(--line); border-radius:6px; padding:18px 20px; max-width:560px; break-inside:avoid; }
+.form-title { font-family:'Fraunces', Georgia, serif; font-size:18px; font-weight:600; }
+.form .intro { color:var(--muted); margin:4px 0 12px; }
+.q { padding:10px 0; border-top:1px solid var(--line); }
+.q-text { font-weight:500; }
+.answers { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
+.answer { border:1px solid var(--line); border-radius:999px; padding:2px 10px; font-size:12px; }
+.answer.yes { border-color:var(--accent); background:var(--chip); color:var(--accent); font-weight:500; }
+.qualifies { font-size:12px; color:var(--accent); }
+.form-foot { font-size:12px; color:var(--muted); margin-top:10px; }
+.ads { display:grid; grid-template-columns:1fr; gap:12px; }
+.ad { border:1px solid var(--line); padding:14px 16px; break-inside:avoid; }
+.ad .card-label { margin-bottom:4px; }
+.ad-headline { font-weight:600; margin:4px 0; }
+.ad p { margin:4px 0; color:var(--ink); }
+.button { display:inline-block; background:var(--accent); color:#fff; border-radius:999px; padding:3px 12px; font-size:12px; margin-top:6px; }
+.kv td:first-child { width:28%; font-weight:600; }
+.script { border:1px solid var(--line); border-left:4px solid var(--accent); padding:10px 14px; margin-bottom:10px; break-inside:avoid; }
+.script .situation { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.script p { margin:4px 0 0; }
+.post { border:1px solid var(--line); border-top:2px solid var(--accent); padding:12px 16px; margin-bottom:12px; break-inside:avoid; }
+.post p { margin:6px 0 0; white-space:pre-wrap; }
+.post .cta { color:var(--accent); font-weight:600; }
+.placeholder { background:var(--amber); padding:0 3px; }
+h2 { break-after:avoid; }
+.section-label { break-after:avoid; }
+@media (max-width: 700px) { .stats { grid-template-columns:1fr; } .check { grid-template-columns:18px 1fr; } .check .date { grid-column:2; } }
+.keep { break-inside:avoid; }
+@media print { @page { margin:0.6in; } }
 """
 
 
+def _highlight_placeholders(escaped):
+    """Shade [bracketed placeholders] so the owner sees what to fill in."""
+    return re.sub(r"\[([^\[\]]{1,200})\]", r"<span class='placeholder'>[\1]</span>", escaped)
+
+
+def _qualifies(answer, qualifies_if):
+    """True when the answer appears as a whole phrase in the Qualifies-if text,
+    so 'No' isn't marked just because 'None' or 'Not' appears there."""
+    return bool(answer) and re.search(r"(?<!\w)" + re.escape(answer) + r"(?!\w)", qualifies_if, re.IGNORECASE) is not None
+
+
+def _stat(number, label):
+    size = "" if len(number) <= 8 else " small"
+    return f"<div class='stat'><div class='stat-num{size}'>{number}</div><div class='stat-label'>{label}</div></div>"
+
+
 def kit_to_html(kit, month_label="", prepared_by="Databite"):
-    """Standalone, print-ready HTML in the same look as the strategy report."""
+    """Standalone, print-ready HTML in the look of Databite's hand-made
+    client PDFs: an at-a-glance page first, then the steps, then the copy."""
     e = lambda s: html.escape(str(s or ""))
+    copy = lambda s: _highlight_placeholders(e(s))
+    form, budget = kit["lead_form"], kit["budget"]
     parts = [
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>",
         "<meta name='viewport' content='width=device-width, initial-scale=1'>",
@@ -210,64 +285,86 @@ def kit_to_html(kit, month_label="", prepared_by="Databite"):
     ]
     if kit["business_name"]:
         parts.append(f"<p class='subtitle'>{e(kit['business_name'])}</p>")
+    first_date = kit["checklist"][0].get("date") if kit["checklist"] else ""
     meta = [m for m in (month_label, f"Prepared by {prepared_by}", "Confidential") if m]
-    parts.append("<div class='meta'>" + "".join(f"<span>{e(m)}</span>" for m in meta) + "</div>")
-    if kit["goal"] or kit["qualified_lead"]:
-        parts.append("<div class='combos'>")
+    start_chip = f"<span class='chip version'>Starts {e(first_date)}</span>" if first_date else ""
+    parts.append("<div class='meta' style='align-items:center'>" + start_chip + "".join(f"<span>{e(m)}</span>" for m in meta) + "</div>")
+
+    # At a glance: the three numbers that define the launch, then the goal.
+    parts += ["<div class='section-label'>At a glance</div>", "<h2>Your launch on one page</h2>", "<div class='stats'>"]
+    parts.append(_stat(e(budget["total"] or "No ad spend"), "Budget" + (f" &middot; {e(budget['daily'])}" if budget["daily"] else "")))
+    if kit["success_measures"]:
+        m = kit["success_measures"][0]
+        parts.append(_stat(e(m.get("target")), f"{e(m.get('metric'))}" + (f" by {e(m.get('check_on'))}" if m.get("check_on") else "")))
+    parts.append(_stat(str(len(kit["checklist"])), f"dated steps &middot; {len(kit['posts'])} ready-to-post posts"))
+    parts.append("</div>")
+    if kit["goal"] or kit["qualified_lead"] or budget["stop_rule"]:
+        parts.append("<div class='glance'><div class='eyebrow'>The plan at a glance</div>")
         if kit["goal"]:
-            parts.append(f"<p><strong>Goal:</strong> {e(kit['goal'])}</p>")
+            parts.append(f"<p><strong>Goal.</strong> {e(kit['goal'])}</p>")
         if kit["qualified_lead"]:
-            parts.append(f"<p><strong>A qualified lead is:</strong> {e(kit['qualified_lead'])}</p>")
+            parts.append(f"<p><strong>A qualified lead is</strong> {e(kit['qualified_lead'])}</p>")
+        if budget["stop_rule"]:
+            parts.append(f"<p><strong>Stop rule.</strong> {e(budget['stop_rule'])}</p>")
         parts.append("</div>")
 
-    if kit["checklist"] or kit["success_measures"]:
-        parts += ["<div class='section-label'>01 &mdash; Checklist</div>", "<h2>Step by step</h2>"]
-    for item in kit["checklist"]:
-        parts.append(f"<div class='check'><strong>{e(item.get('date'))}</strong><div>{e(item.get('step'))}<p>Done when: {e(item.get('done_when'))}</p></div></div>")
+    n = 0
+    def section(label, heading):
+        nonlocal n
+        n += 1
+        return [f"<div class='section-label'>{n:02d} &mdash; {label}</div>", f"<h2>{heading}</h2>"]
+
+    if kit["checklist"]:
+        parts += section("Checklist", "Step by step")
+        for item in kit["checklist"]:
+            parts.append(f"<div class='check'><div class='box'></div><div class='date'>{e(item.get('date'))}</div>"
+                         f"<div>{copy(item.get('step'))}<p>Done when: {e(item.get('done_when'))}</p></div></div>")
     if kit["success_measures"]:
-        parts.append("<table><thead><tr><th>Success measure</th><th>Target</th><th>Check on</th></tr></thead><tbody>")
+        parts.append("<div class='keep'><h2 style='margin-top:24px'>How you'll know it's working</h2><table class='measures'><thead><tr><th>Measure</th><th>Target</th><th>Check on</th></tr></thead><tbody>")
         for m in kit["success_measures"]:
-            parts.append(f"<tr><td>{e(m.get('metric'))}</td><td>{e(m.get('target'))}</td><td>{e(m.get('check_on'))}</td></tr>")
-        parts.append("</tbody></table>")
+            parts.append(f"<tr><td>{e(m.get('metric'))}</td><td class='target'>{e(m.get('target'))}</td><td>{e(m.get('check_on'))}</td></tr>")
+        parts.append("</tbody></table></div>")
 
-    parts += ["<div class='section-label'>02 &mdash; Posts</div>", "<h2>Ready to paste</h2>"]
-    for post in kit["posts"]:
-        parts.append(f"<div class='post'><div class='card-label'>{e(post.get('date'))}</div><div class='card-title'>{e(post.get('title'))}</div>"
-                     f"<p>{e(post.get('copy'))}</p><p class='cta'>{e(post.get('call_to_action'))}</p></div>")
-
-    section = 3
-    if kit["ads"]:
-        parts += [f"<div class='section-label'>0{section} &mdash; Ads</div>", "<h2>Ad variations to test</h2>",
-                  "<table><thead><tr><th>Ad</th><th>Copy</th><th>Button</th></tr></thead><tbody>"]
-        for ad in kit["ads"]:
-            parts.append(f"<tr><td style='width:24%'><strong>{e(ad.get('name'))}</strong><span class='budget'>{e(ad.get('audience'))}</span></td>"
-                         f"<td><strong>{e(ad.get('headline'))}</strong><br>{e(ad.get('primary_text'))}</td><td style='width:16%'>{e(ad.get('cta_button'))}</td></tr>")
-        parts.append("</tbody></table>")
-        section += 1
-    form = kit["lead_form"]
     if form["questions"]:
-        parts += [f"<div class='section-label'>0{section} &mdash; Lead form</div>"]
+        parts += section("Lead form", "Screen leads before you call")
         if form["how_it_works"]:
-            parts += ["<h2>How the lead form works</h2><ol>"] + [f"<li>{e(step)}</li>" for step in form["how_it_works"]] + ["</ol>"]
-        parts += [f"<h2>{e(form['headline']) or 'Lead form'}</h2>", f"<p>{e(form['intro'])}</p>",
-                  "<div class='questions'><div class='eyebrow'>Qualifying questions</div><ol>"]
+            parts.append("<div class='steps'><div class='eyebrow'>How the lead form works</div><ol>" + "".join(f"<li>{e(step)}</li>" for step in form["how_it_works"]) + "</ol></div>")
+        parts.append(f"<div class='form'><div class='form-title'>{e(form['headline'])}</div><p class='intro'>{e(form['intro'])}</p>")
         for q in form["questions"]:
-            parts.append(f"<li>{e(q.get('question'))}<p>{e(' / '.join(q['answers']))}</p><p>Qualifies if: {e(q.get('qualifies_if'))}</p></li>")
-        parts.append(f"</ol></div><p><strong>Privacy:</strong> {e(form['privacy_note'])}</p><p><strong>Thank-you screen:</strong> {e(form['thank_you'])}</p>")
-        section += 1
-    if kit["targeting"] or any(kit["budget"].values()):
-        parts += [f"<div class='section-label'>0{section} &mdash; Targeting and budget</div>", "<h2>Settings to enter</h2>", "<table><tbody>"]
+            qualifies = str(q.get("qualifies_if") or "")
+            answers = "".join(f"<span class='answer{' yes' if _qualifies(a, qualifies) else ''}'>{e(a)}</span>" for a in q["answers"])
+            parts.append(f"<div class='q'><div class='q-text'>{e(q.get('question'))}</div><div class='answers'>{answers}</div>"
+                         f"<div class='qualifies'>Qualifies if: {e(qualifies)}</div></div>")
+        parts.append(f"<div class='form-foot'><strong>Privacy:</strong> {e(form['privacy_note'])}<br><strong>Thank-you screen:</strong> {e(form['thank_you'])}</div></div>")
+
+    if kit["ads"]:
+        parts += section("Ads", "Ad variations to test") + ["<div class='ads'>"]
+        for ad in kit["ads"]:
+            parts.append(f"<div class='ad'><div class='card-label'>{e(ad.get('name'))} &middot; {e(ad.get('audience'))}</div>"
+                         f"<p>{copy(ad.get('primary_text'))}</p><div class='ad-headline'>{copy(ad.get('headline'))}</div>"
+                         f"<span class='button'>{e(ad.get('cta_button'))}</span></div>")
+        parts.append("</div>")
+
+    if kit["targeting"] or any(budget.values()):
+        parts += section("Targeting and budget", "Settings to enter") + ["<table class='kv'><tbody>"]
         for t in kit["targeting"]:
-            parts.append(f"<tr><td style='width:28%'><strong>{e(t.get('setting'))}</strong></td><td>{e(t.get('value'))}</td></tr>")
+            parts.append(f"<tr><td>{e(t.get('setting'))}</td><td>{e(t.get('value'))}</td></tr>")
         for field, label in (("total", "Total budget"), ("daily", "Daily budget"), ("schedule", "Schedule"), ("stop_rule", "Stop rule")):
-            if kit["budget"][field]:
-                parts.append(f"<tr><td><strong>{label}</strong></td><td>{e(kit['budget'][field])}</td></tr>")
+            if budget[field]:
+                parts.append(f"<tr><td>{label}</td><td>{e(budget[field])}</td></tr>")
         parts.append("</tbody></table>")
-        section += 1
+
     if kit["reply_scripts"]:
-        parts += [f"<div class='section-label'>0{section} &mdash; Reply scripts</div>", "<h2>When someone responds</h2>"]
+        parts += section("Reply scripts", "When someone responds")
         for r in kit["reply_scripts"]:
-            parts.append(f"<p><strong>{e(r.get('situation'))}</strong></p><blockquote>{e(r.get('message'))}</blockquote>")
+            parts.append(f"<div class='script'><div class='situation'>{e(r.get('situation'))}</div><p>{copy(r.get('message'))}</p></div>")
+
+    if kit["posts"]:
+        parts += section("Posts", "Ready to paste")
+        parts.append("<p class='intro' style='color:var(--muted)'>Shaded <span class='placeholder'>[brackets]</span> mark details only you can fill in.</p>")
+        for post in kit["posts"]:
+            parts.append(f"<div class='post'><div class='card-label'>{e(post.get('date'))}</div><div class='card-title'>{e(post.get('title'))}</div>"
+                         f"<p>{copy(post.get('copy'))}</p><p class='cta'>{copy(post.get('call_to_action'))}</p></div>")
 
     footer_left = " &middot; ".join(e(x) for x in (prepared_by, "Launch kit", month_label) if x)
     parts.append(f"<div class='footer'><strong>{footer_left}</strong><span>{e(kit['business_name'])}</span></div>")

@@ -63,11 +63,26 @@ def test_kit_renders_and_escapes():
     assert "- [ ] **Dec 1:**" in md and "Qualifies if: Yes or planning to" in md
 
 
+def test_kit_html_marks_qualifying_answers_and_placeholders():
+    page = launch_kit.kit_to_html(launch_kit.parse_kit(KIT_FIXTURE))
+    assert "<span class='answer yes'>10+ years</span>" in page
+    assert "<span class='answer'>No</span>" in page
+    assert "<span class='placeholder'>[amount]</span>" in page
+    assert "Your launch on one page" in page and "$400 for December" in page
+
+
 def test_kit_prompt_carries_channel_dates_and_budget():
     prompt = launch_kit.build_kit_prompt("Strategy text", "LinkedIn", "Maple Advisory Group", datetime.date(2026, 12, 1),
                                          "investment season Dec-Feb", "$300-500/month", "travelling in November")
+    assert "never a JSON key name" in prompt and "never \"Request demo\"" in prompt
     for text in ["LinkedIn", "Maple Advisory Group", "December 1, 2026", "investment season Dec-Feb", "$300-500/month", "travelling in November", "qualifies_if", "how_it_works"]:
         assert text in prompt
+
+
+def test_kit_prompt_includes_report_source_only_when_given():
+    with_source = launch_kit.build_kit_prompt("Strategy text", "LinkedIn", source_text="I built a receipt-storage app myself.")
+    assert "Original notes or transcript" in with_source and "I built a receipt-storage app myself." in with_source
+    assert "Original notes or transcript" not in launch_kit.build_kit_prompt("Strategy text", "LinkedIn")
 
 
 def test_report_prompt_uses_dates_and_success_measures():
@@ -76,6 +91,7 @@ def test_report_prompt_uses_dates_and_success_measures():
     assert '"success_measure"' in prompt
     assert "do not assume customers will refer" in prompt
     assert "At least one insight should turn" not in prompt
+    assert "already decided to run ads at a certain time" in prompt
     undated = strategy_report.build_report_prompt("notes")
     assert '"Week 1"' in undated
 
@@ -92,7 +108,8 @@ def test_report_flags_missing_success_measure():
 def test_app_builds_kit_from_report_with_stubbed_claude():
     from streamlit.testing.v1 import AppTest
 
-    # Stub Anthropic: the report prompt gets the report, the kit prompt the kit.
+    # Stub Anthropic: the report prompt gets the report, and the kit prompt
+    # gets the kit only if it carries the report's original source text.
     at = AppTest.from_string(
         "import sys\n"
         f"sys.path.insert(0, {str(ROOT)!r})\n"
@@ -100,7 +117,10 @@ def test_app_builds_kit_from_report_with_stubbed_claude():
         f"RESPONSES = [{REPORT_FIXTURE!r}, {KIT_FIXTURE!r}]\n"
         "class _Msgs:\n"
         "    def create(self, **kw):\n"
-        "        text = RESPONSES[1 if 'launch kit' in kw['messages'][0]['content'] else 0]\n"
+        "        content = kw['messages'][0]['content']\n"
+        "        if 'launch kit' not in content: text = RESPONSES[0]\n"
+        "        elif 'gets clients by referral' in content: text = RESPONSES[1]\n"
+        "        else: text = 'kit prompt is missing the report source'\n"
         "        class U: input_tokens = 5000; output_tokens = 3000\n"
         "        class B: type = 'text'\n"
         "        B.text = text\n"
@@ -124,6 +144,9 @@ def test_app_builds_kit_from_report_with_stubbed_claude():
     at.text_area(key="report_text").input("A financial advisor in Ontario who gets clients by referral and wants LinkedIn leads.")
     next(b for b in at.button if b.label == "Build strategy report").click().run()
     assert not at.exception
+    next(b for b in at.button if b.label == "Build a launch kit from this report →").click().run()
+    assert not at.exception
+    assert at.session_state["main_tab"] == "Launch kit"
     at.selectbox(key="kit_channel_pick").select("LinkedIn")
     at.text_input(key="kit_budget").input("$400 for December")
     next(b for b in at.button if b.label == "Build launch kit").click().run()

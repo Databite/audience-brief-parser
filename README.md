@@ -111,7 +111,7 @@ The "Strategy report" tab turns free text about a business into a client-ready A
 5. **Next 30 days:** dated actions, each with how to know it's done or working.
 6. **Open questions:** validation questions, each with why it matters.
 
-**Download.** As a print-ready HTML page (open it and print to PDF for the client) or as Markdown.
+**Download.** As a print-ready HTML page (open it and print to PDF for the client) or as Markdown. Below the downloads, **Build a launch kit from this report →** switches to the Launch kit tab with this report selected.
 
 **Cost and limits.** One report is estimated at up to $0.50 against the session cap. The response is allowed up to 32,000 output tokens (the model's thinking counts against the same budget) so long reports aren't cut off; if one is still cut off, the app shows the sections that arrived, flags what's missing and warns you, instead of failing silently.
 
@@ -121,7 +121,7 @@ Prompt, validation and rendering live in `strategy_report.py`, which has no Stre
 
 ## Launch kit
 
-The "Launch kit" tab builds from the strategy report made in the same session (pick one of its channels) or from a pasted strategy, notes or transcript (name the channel). Set the launch start date, an optional ad budget, key dates and any notes, such as who counts as a qualified lead.
+The "Launch kit" tab builds from the strategy report made in the same session (pick one of its channels; the report's original notes or transcript are sent too, so details the report summarized away still reach the kit) or from a pasted strategy, notes or transcript (name the channel). Set the launch start date, an optional ad budget, key dates and any notes, such as who counts as a qualified lead.
 
 **Output:**
 
